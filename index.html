@@ -28,6 +28,7 @@ input, button, select { font-size: 16px; margin: 5px; }
   <div>
     總玩家數: 
     <select id="totalPlayersSel">
+      <option value="1">1</option>
       <option value="2">2</option>
       <option value="3">3</option>
       <option value="4">4</option>
@@ -42,168 +43,12 @@ input, button, select { font-size: 16px; margin: 5px; }
   <div id="playerCards"></div>
 </div>
 
-<script type="module">
-import { initializeApp } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-app.js";
-import { getDatabase, ref, set, get, update, onValue } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-database.js";
+<!-- ❗ GitHub Pages 可運作的 Firebase CDN 版本 -->
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
 
-// --- Firebase 設定 ---
-const firebaseConfig = {
-  apiKey: "AIzaSyCk54DEp6rzvpfQBBNW_iJByZ3boyHEPF0",
-  authDomain: "poolpokergame-b88ed.firebaseapp.com",
-  databaseURL: "https://poolpokergame-b88ed-default-rtdb.asia-southeast1.firebasedatabase.app",
-  projectId: "poolpokergame-b88ed",
-  storageBucket: "poolpokergame-b88ed.appspot.com",
-  messagingSenderId: "574863840102",
-  appId: "1:574863840102:web:14368aaf84b3640c6eeea7"
-};
-const app = initializeApp(firebaseConfig);
-const db = getDatabase(app);
-
-// --- DOM 元素 ---
-const loginDiv = document.getElementById('loginDiv');
-const gameDiv = document.getElementById('gameDiv');
-const nicknameInput = document.getElementById('nickname');
-const joinBtn = document.getElementById('joinBtn');
-const totalPlayersSel = document.getElementById('totalPlayersSel');
-const setTotalBtn = document.getElementById('setTotalBtn');
-const startGameBtn = document.getElementById('startGameBtn');
-const restartBtn = document.getElementById('restartBtn');
-const notice = document.getElementById('notice');
-const numButtonsDiv = document.getElementById('numButtons');
-const playerCardsDiv = document.getElementById('playerCards');
-
-// --- 全域變數 ---
-let myId = 'player_' + Math.random().toString(36).substr(2, 9);
-let myNickname = '';
-let gameRef = ref(db, 'games/main_pool_game_demo');
-let gameStarted = false;
-
-// --- 撞球顏色按鈕 ---
-const ballColors = {
-  1:'yellow', 2:'blue', 3:'red', 4:'purple', 5:'orange', 6:'green', 7:'brown', 8:'black',
-  9:'linear-gradient(to right, yellow, white)', 10:'linear-gradient(to right, blue, white)',
-  11:'linear-gradient(to right, red, white)', 12:'linear-gradient(to right, purple, white)',
-  13:'linear-gradient(to right, orange, white)'
-};
-
-for(let i=1;i<=13;i++){
-  const btn=document.createElement('button');
-  btn.textContent=i;
-  btn.className='num-btn';
-  btn.style.background = ballColors[i];
-  btn.style.color = i<=8 ? 'black' : 'white';
-  btn.addEventListener('click',()=>markNumber(i));
-  numButtonsDiv.appendChild(btn);
-}
-
-// --- 加入房間 ---
-joinBtn.addEventListener('click', async ()=>{
-  const nickname = nicknameInput.value.trim();
-  if(!nickname){ notice.textContent='請輸入暱稱'; return; }
-  myNickname = nickname;
-  const snap = await get(gameRef);
-  if(!snap.exists()){
-    await set(gameRef, { creatorId: myId, players:{[myId]:{nickname, cards:[], marked:[]}}, totalPlayers:2, gameStarted:false, cardsPerPlayer:5 });
-  } else {
-    const g = snap.val();
-    if(g.players && Object.keys(g.players).length >= 5){ notice.textContent='房間已滿'; return; }
-    await update(gameRef, { ['players/'+myId]:{nickname, cards:[], marked:[]} });
-  }
-  loginDiv.style.display='none';
-  gameDiv.style.display='block';
-  notice.textContent='歡迎 '+nickname+'！';
-});
-
-// --- 設定總玩家數 ---
-setTotalBtn.addEventListener('click', async ()=>{
-  const v=parseInt(totalPlayersSel.value);
-  if(v<2||v>5){ notice.textContent='玩家數必須2~5'; return;}
-  const snap=await get(gameRef);
-  const g=snap.val();
-  if(g.creatorId!==myId){ notice.textContent='只有房主可以設定玩家數'; return;}
-  await update(gameRef,{totalPlayers:v});
-  notice.textContent=`總玩家數已更新為 ${v}`;
-});
-
-// --- 開始遊戲 ---
-startGameBtn.addEventListener('click', async ()=>{
-  try {
-    const snap = await get(gameRef);
-    const g = snap.val();
-    if(!g){ notice.textContent='房間資料不存在'; return; }
-    if(!g.creatorId){ await update(gameRef,{creatorId:myId}); g.creatorId=myId; }
-    if(g.creatorId!==myId){ notice.textContent='只有房主可以開始遊戲'; return;}
-    if(!g.players || Object.keys(g.players).length===0){ notice.textContent='房間內沒有玩家'; return;}
-    const playerIds = Object.keys(g.players);
-    const cardsPerPlayer = g.cardsPerPlayer || 5;
-
-    let deck=[];
-    for(let i=1;i<=13;i++){ deck.push(i,i,i,i); }
-    deck=deck.sort(()=>Math.random()-0.5);
-
-    let newPlayers={};
-    for(let i=0;i<playerIds.length;i++){
-      const pid=playerIds[i];
-      newPlayers[pid]={...g.players[pid], cards:deck.slice(i*cardsPerPlayer,(i+1)*cardsPerPlayer), marked:[]};
-    }
-    await update(gameRef,{players:newPlayers, gameStarted:true});
-    notice.textContent='遊戲已開始！';
-  } catch(err){ console.error(err); notice.textContent='開始遊戲失敗'; }
-});
-
-// --- 重新開局 ---
-restartBtn.addEventListener('click', async ()=>{
-  try{
-    const snap=await get(gameRef);
-    const g=snap.val();
-    if(!g){ notice.textContent='房間不存在'; return; }
-    if(g.creatorId!==myId){ notice.textContent='只有房主可以重新開局'; return; }
-    let newPlayers={};
-    for(const pid in g.players){
-      newPlayers[pid]={nickname:g.players[pid].nickname, cards:[], marked:[]};
-    }
-    await update(gameRef,{players:newPlayers, gameStarted:false});
-    notice.textContent='已重新開局';
-  }catch(err){ console.error(err); notice.textContent='重新開局失敗'; }
-});
-
-// --- 標註數字 ---
-async function markNumber(num){
-  const snap=await get(gameRef);
-  const g=snap.val();
-  if(!g.gameStarted){ notice.textContent='遊戲尚未開始'; return;}
-  const myData=g.players[myId];
-  if(!myData.marked.includes(num)){
-    myData.marked.push(num);
-    await update(ref(db,'games/main_pool_game_demo/players/'+myId),{marked:myData.marked});
-  }
-}
-
-// --- 監聽 Database 更新 ---
-onValue(gameRef,(snap)=>{
-  const g=snap.val();
-  if(!g) return;
-  gameStarted=g.gameStarted;
-  playerCardsDiv.innerHTML='';
-  for(const pid in g.players){
-    const div=document.createElement('div');
-    div.innerHTML='<b>'+g.players[pid].nickname+'</b>';
-    const cardsDiv=document.createElement('div');
-    cardsDiv.className='cards';
-    const player=g.players[pid];
-    for(let c of player.cards){
-      const span=document.createElement('div');
-      span.className='card';
-      if(pid!==myId && !player.marked.includes(c)){ span.classList.add('hidden'); span.textContent=''; }
-      else if(player.marked.includes(c)){ span.classList.add('marked'); span.textContent=c; }
-      else { span.textContent=c; }
-      cardsDiv.appendChild(span);
-    }
-    div.appendChild(cardsDiv);
-    playerCardsDiv.appendChild(div);
-  }
-});
-</script>
+<!-- 你的遊戲邏輯 -->
+<script src="script.js"></script>
 
 </body>
 </html>
