@@ -1,168 +1,197 @@
-<!doctype html>
-<html lang="zh-Hant">
+<!DOCTYPE html>
+<html lang="zh-TW">
 <head>
-<meta charset="utf-8" />
-<meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>多人賓果／發牌遊戲（Realtime DB）</title>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>撞球賓果遊戲</title>
 <style>
-:root{--accent:#1e88e5;--muted:#e6eefc;--card-w:72px;--card-h:96px}
-body{font-family:system-ui,-apple-system,"Segoe UI",Roboto,"Noto Sans TC";margin:12px;background:#f5f8fc;color:#0b2235}
-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}
-h1{font-size:17px;margin:0}
-.row{display:flex;gap:8px;align-items:center}
-input[type="text"],select{padding:8px;border-radius:6px;border:1px solid #d7e0ef}
-button{background:var(--accent);color:#fff;border:0;padding:8px 12px;border-radius:6px;cursor:pointer}
-button.ghost{background:transparent;color:var(--accent);border:1px solid var(--accent)}
-#lobby, #game{background:#fff;padding:12px;border-radius:10px;box-shadow:0 3px 8px rgba(13,38,63,0.06);margin-bottom:12px}
-.players-list{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
-.pill{padding:6px 10px;border-radius:999px;background:#eef6ff;color:#0a5fb0}
-.digit-row{display:flex;gap:8px;flex-wrap:wrap;margin:10px 0}
-.digit{width:36px;height:36px;border-radius:50%;display:flex;align-items:center;justify-content:center;background:var(--accent);color:#fff;font-weight:700;cursor:pointer}
-.digit.disabled{opacity:0.35;pointer-events:none}
-.board-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px}
-.player-board{padding:10px;border-radius:8px;background:#fafcff;border:1px solid #eef3fb}
-.card{width:var(--card-w);height:var(--card-h);border-radius:8px;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:18px;background:#fff;border:1px solid #e0e6f2;position:relative}
-.card.blank{background:linear-gradient(180deg,#fbfdff,#fff);border:2px dashed #e1e7f6;color:transparent}
-.card.revealed{color:#072033}
-.card.marked{background:#efefef;color:#9aa3ad;text-decoration:line-through}
-footer{font-size:13px;color:#6b7785}
-.notice{color:#a33;margin-top:8px}
-.small{font-size:13px;color:#557}
+  body { font-family: sans-serif; text-align: center; margin:0; padding:0; }
+  input, button, select { font-size: 16px; margin: 5px; }
+  #notice { color: red; margin-top: 10px; }
+  .cards { display:flex; justify-content:center; margin:10px; }
+  .card { width:30px; height:40px; border:1px solid #000; margin:2px; display:flex; align-items:center; justify-content:center; font-weight:bold; }
+  .hidden { background:#ccc; }
+  .marked { background:#aaa; color:#fff; }
+  .num-btn { width:30px; height:30px; margin:2px; border-radius:50%; }
 </style>
 </head>
 <body>
-<header>
-<h1>多人賓果／發牌遊戲（Realtime DB）</h1>
-<div class="row">
-<div class="small">連線狀態：<span id="status">連線中…</span></div>
-<button id="resetAll" class="ghost" style="margin-left:8px">重新開局</button>
-</div>
-</header>
 
-<div id="lobby">
-<div id="loginArea" class="row">
-<label>你的名字：</label>
-<input id="name" placeholder="例如：小明" />
-<button id="joinBtn">加入房間</button>
+<h1>撞球賓果遊戲</h1>
+
+<div id="loginDiv">
+  <input type="text" id="nickname" placeholder="輸入暱稱">
+  <button id="joinBtn">加入房間</button>
 </div>
 
-<div id="creatorArea" style="display:none;margin-top:8px">
-<div class="small">你是房主 — 可設定總玩家數（2〜5）</div>
-<div style="margin-top:6px" class="row">
-<label>玩家數：</label>
-<select id="totalPlayers">
-<option>2</option><option>3</option><option selected>4</option><option>5</option>
-</select>
-<button id="setTotalBtn" class="ghost">設定</button>
+<div id="gameDiv" style="display:none;">
+  <div>
+    總玩家數: 
+    <select id="totalPlayersSel">
+      <option value="2">2</option>
+      <option value="3">3</option>
+      <option value="4">4</option>
+      <option value="5">5</option>
+    </select>
+    <button id="setTotalBtn">設定</button>
+    <button id="startGameBtn">開始遊戲</button>
+    <button id="restartBtn">重新開局</button>
+  </div>
+  <div id="notice"></div>
+  <div id="numButtons"></div>
+  <div id="playerCards"></div>
 </div>
-</div>
-
-<div id="joinedArea" style="display:none;margin-top:8px">
-<div class="small">已加入：</div>
-<div class="players-list" id="playersList"></div>
-<div style="margin-top:8px">
-<button id="startBtn" style="display:none">遊戲開始（房主）</button>
-</div>
-</div>
-<div class="notice" id="notice"></div>
-</div>
-
-<div id="game" style="display:none">
-<div class="small">發牌後畫面：你的牌會顯示，其他玩家預設為白框。按上方 1–13 按鈕可曝光並標注。</div>
-<div style="margin-top:8px" class="row">
-<div id="digitRow" class="digit-row"></div>
-</div>
-
-<div class="board-grid" id="boards"></div>
-</div>
-
-<footer>
-<div class="small">部署提醒：把此檔放到 Firebase Hosting 或任何靜態主機，手機打開網址即可加入（跨裝置同步）。</div>
-</footer>
 
 <script type="module">
-import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
-import { getDatabase, ref, set, update, onValue, get } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
+import { initializeApp } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-app.js";
+import { getDatabase, ref, set, get, update, onValue } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-database.js";
 
+// --- Firebase 設定 ---
 const firebaseConfig = {
-apiKey: "AIzaSyCk54DEp6rzvpfQBBNW_iJByZ3boyHEPF0",
-authDomain: "poolpokergame-b88ed.firebaseapp.com",
-databaseURL: "https://poolpokergame-b88ed-default-rtdb.asia-southeast1.firebasedatabase.app/",
-projectId: "poolpokergame-b88ed",
-storageBucket: "poolpokergame-b88ed.firebasestorage.app",
-messagingSenderId: "574863840102",
-appId: "1:574863840102:web:14368aaf84b3640c6eeea7"
+  apiKey: "AIzaSyCk54DEp6rzvpfQBBNW_iJByZ3boyHEPF0",
+  authDomain: "poolpokergame-b88ed.firebaseapp.com",
+  databaseURL: "https://poolpokergame-b88ed-default-rtdb.asia-southeast1.firebasedatabase.app",
+  projectId: "poolpokergame-b88ed",
+  storageBucket: "poolpokergame-b88ed.appspot.com",
+  messagingSenderId: "574863840102",
+  appId: "1:574863840102:web:14368aaf84b3640c6eeea7"
 };
-
 const app = initializeApp(firebaseConfig);
 const db = getDatabase(app);
-const gameRef = ref(db,'game');
 
-const statusEl = document.getElementById('status');
-const nameInput = document.getElementById('name');
+// --- DOM 元素 ---
+const loginDiv = document.getElementById('loginDiv');
+const gameDiv = document.getElementById('gameDiv');
+const nicknameInput = document.getElementById('nickname');
 const joinBtn = document.getElementById('joinBtn');
-const playersList = document.getElementById('playersList');
-const creatorArea = document.getElementById('creatorArea');
+const totalPlayersSel = document.getElementById('totalPlayersSel');
 const setTotalBtn = document.getElementById('setTotalBtn');
-const totalPlayersSel = document.getElementById('totalPlayers');
-const joinedArea = document.getElementById('joinedArea');
-const startBtn = document.getElementById('startBtn');
-const gameDiv = document.getElementById('game');
-const digitRow = document.getElementById('digitRow');
-const boardsDiv = document.getElementById('boards');
-const resetAllBtn = document.getElementById('resetAll');
+const startGameBtn = document.getElementById('startGameBtn');
+const restartBtn = document.getElementById('restartBtn');
 const notice = document.getElementById('notice');
+const numButtonsDiv = document.getElementById('numButtons');
+const playerCardsDiv = document.getElementById('playerCards');
 
-let myId = sessionStorage.getItem('localPlayerId') || ('p_'+Math.random().toString(36).slice(2,9));
-sessionStorage.setItem('localPlayerId', myId);
-let myName = sessionStorage.getItem('myName') || '';
-if(myName) nameInput.value = myName;
+// --- 全域變數 ---
+let myId = 'player_' + Math.random().toString(36).substr(2, 9);
+let myNickname = '';
+let gameRef = ref(db, 'games/main_pool_game_demo');
+let myCards = [];
+let totalPlayers = 2;
+let gameStarted = false;
 
-function makeDeck(){const d=[];for(let s=0;s<4;s++){for(let r=1;r<=13;r++){d.push({rank:r,suit:s,id:`${r}-${s}`})}}for(let i=d.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[d[i],d[j]]=[d[j],d[i]]}return d;}
-function rankLabel(r){return String(r);}
-
-function renderLobby(game){
-  if(!game){creatorArea.style.display='none';joinedArea.style.display='none';document.getElementById('loginArea').style.display='';playersList.innerHTML='';return;}
-  playersList.innerHTML='';
-  const players=game.players||{};
-  const order=Object.keys(players);
-  if(order.length>0){joinedArea.style.display='';document.getElementById('loginArea').style.display='none';}else{joinedArea.style.display='none';document.getElementById('loginArea').style.display='';}
-  for(const pid of order){const p=players[pid];const el=document.createElement('div');el.className='pill';el.textContent=p.name+(pid===game.creatorId?' （房主）':'');playersList.appendChild(el);}
-  creatorArea.style.display=(game.creatorId===myId && !game.started)?'':'none';
-  startBtn.style.display=(game.creatorId===myId && !game.started && game.totalPlayers && order.length===game.totalPlayers)?'':'none';
-  if(game.totalPlayers) totalPlayersSel.value=String(game.totalPlayers);
+// --- 初始化數字按鈕 ---
+for(let i=1;i<=13;i++){
+  const btn=document.createElement('button');
+  btn.textContent=i;
+  btn.className='num-btn';
+  btn.addEventListener('click',()=>markNumber(i));
+  numButtonsDiv.appendChild(btn);
 }
 
-function renderGame(game){
-  if(!game || !game.started){gameDiv.style.display='none';return;}
-  gameDiv.style.display='';
-  digitRow.innerHTML='';
-  for(let d=1;d<=13;d++){const btn=document.createElement('div');btn.className='digit';btn.textContent=d;btn.dataset.d=d;btn.addEventListener('click',()=>pressDigit(d));digitRow.appendChild(btn);}
-  boardsDiv.innerHTML='';
-  const players=game.players||{};
-  const order=Object.keys(players);
-  const hands=game.hands||{};
-  const cardsPer=game.cardsPerPlayer||0;
-  for(const pid of order){const p=players[pid];const board=document.createElement('div');board.className='player-board';const title=document.createElement('div');title.className='small';title.style.fontWeight='700';title.style.marginBottom='6px';title.textContent=p.name+(pid===myId?'（你）':'');board.appendChild(title);const wrap=document.createElement('div');wrap.style.display='flex';wrap.style.gap='8px';wrap.style.flexWrap='wrap';for(let i=0;i<cardsPer;i++){const cardEl=document.createElement('div');cardEl.className='card';cardEl.dataset.playerId=pid;cardEl.dataset.index=i;const hand=hands[pid]||[];const cardObj=hand[i]||null;if(pid===myId){if(cardObj){cardEl.classList.add('revealed');cardEl.textContent=rankLabel(cardObj.rank);cardEl.dataset.card=JSON.stringify(cardObj);}else{cardEl.classList.add('blank');}}else{cardEl.classList.add('blank');if(cardObj) cardEl.dataset.card=JSON.stringify(cardObj);}wrap.appendChild(cardEl);}board.appendChild(wrap);boardsDiv.appendChild(board);}
-  if(game.marks&&Array.isArray(game.marks)){for(const m of game.marks){applyMarkToUI(m.digit);}}
+// --- 加入房間 ---
+joinBtn.addEventListener('click', async ()=>{
+  const nickname = nicknameInput.value.trim();
+  if(!nickname){ notice.textContent='請輸入暱稱'; return; }
+  myNickname = nickname;
+  const snap = await get(gameRef);
+  if(!snap.exists()){
+    await set(gameRef, { creatorId: myId, players:{[myId]:{nickname, cards:[], marked:[]}}, totalPlayers:2, gameStarted:false, cardsPerPlayer:5 });
+  } else {
+    const g = snap.val();
+    if(g.players && Object.keys(g.players).length >= 5){ notice.textContent='房間已滿'; return; }
+    await update(gameRef, { ['players/'+myId]:{nickname, cards:[], marked:[]} });
+  }
+  loginDiv.style.display='none';
+  gameDiv.style.display='block';
+  notice.textContent='歡迎 '+nickname+'！';
+});
+
+// --- 設定總玩家數 ---
+setTotalBtn.addEventListener('click', async ()=>{
+  const v=parseInt(totalPlayersSel.value);
+  if(v<2||v>5){ notice.textContent='玩家數必須2~5'; return;}
+  const snap=await get(gameRef);
+  const g=snap.val();
+  if(g.creatorId!==myId){ notice.textContent='只有房主可以設定玩家數'; return;}
+  await update(gameRef,{totalPlayers:v});
+  totalPlayers=v;
+  notice.textContent=`總玩家數已更新為 ${v}`;
+});
+
+// --- 開始遊戲 ---
+startGameBtn.addEventListener('click', async ()=>{
+  const snap=await get(gameRef);
+  const g=snap.val();
+  if(g.creatorId!==myId){ notice.textContent='只有房主可以開始遊戲'; return;}
+  const playerIds=Object.keys(g.players);
+  const cardsPerPlayer= g.cardsPerPlayer || 5;
+  let deck=[];
+  for(let i=1;i<=13;i++){ deck.push(i, i, i, i); } // 4套1~13
+  // 洗牌
+  deck = deck.sort(()=>Math.random()-0.5);
+  let newPlayers={};
+  for(let i=0;i<playerIds.length;i++){
+    newPlayers[playerIds[i]]={...g.players[playerIds[i]], cards:deck.slice(i*cardsPerPlayer,(i+1)*cardsPerPlayer), marked:[]};
+  }
+  await update(gameRef,{players:newPlayers, gameStarted:true});
+});
+
+// --- 重新開局 ---
+restartBtn.addEventListener('click', async ()=>{
+  const snap=await get(gameRef);
+  const g=snap.val();
+  if(g.creatorId!==myId){ notice.textContent='只有房主可以重新開局'; return;}
+  let newPlayers={};
+  for(const pid in g.players){
+    newPlayers[pid]={nickname:g.players[pid].nickname, cards:[], marked:[]};
+  }
+  await update(gameRef,{players:newPlayers, gameStarted:false});
+  notice.textContent='已重新開局';
+});
+
+// --- 標註數字 ---
+async function markNumber(num){
+  const snap=await get(gameRef);
+  const g=snap.val();
+  if(!g.gameStarted){ notice.textContent='遊戲尚未開始'; return;}
+  const myData=g.players[myId];
+  if(!myData.marked.includes(num)){
+    myData.marked.push(num);
+    await update(ref(db,'games/main_pool_game_demo/players/'+myId),{marked:myData.marked});
+  }
 }
 
-function applyMarkToUI(digit){const cards=boardsDiv.querySelectorAll('.card');cards.forEach(c=>{const data=c.dataset.card;if(!data) return;try{const obj=JSON.parse(data);if(obj&&obj.rank===digit){c.classList.remove('blank');c.classList.add('revealed','marked');c.textContent=rankLabel(obj.rank);}}catch(e){}});}
-
-async function pressDigit(digit){const now=Date.now();const mark={digit,by:myId,ts:now};const snap=await get(gameRef);const g=snap.exists()?snap.val():null;if(!g) return;const marks=g.marks||[];marks.push(mark);await update(gameRef,{marks});}
-
-joinBtn.addEventListener('click',async ()=>{const name=nameInput.value.trim()||('玩家-'+myId.slice(-4));myName=name;sessionStorage.setItem('myName',name);const snap=await get(gameRef);const g=snap.exists()?snap.val():null;if(!g){const newGame={players:{},creatorId:myId,totalPlayers:parseInt(totalPlayersSel.value)||4,started:false,cardsPerPlayer:0,marks:[]};newGame.players[myId]={name,joinedAt:Date.now()};await set(gameRef,newGame);}else{if(g.started){alert('遊戲已經開始，請等下一局或按重新開局。');return;}const players=g.players||{};if(!players[myId]){players[myId]={name,joinedAt:Date.now()};await update(gameRef,{players});}}});
-
-setTotalBtn.addEventListener('click',async ()=>{const v=parseInt(totalPlayersSel.value);const snap=await get(gameRef);const g=snap.exists()?snap.val():null;if(!g) return;if(g.creatorId!==myId){alert('只有房主可以設定玩家數');return;}await update(gameRef,{totalPlayers:v});});
-
-startBtn.addEventListener('click',async ()=>{const snap=await get(gameRef);const g=snap.exists()?snap.val():null;if(!g) return;if(g.creatorId!==myId){alert('只有房主可以開始遊戲');return;}const players=g.players||{};const pcount=Object.keys(players).length;if(!g.totalPlayers||pcount!==g.totalPlayers){alert('玩家數尚未到齊');return;}let n=parseInt(prompt('每位玩家發幾張牌？（1 - 8）',String(g.cardsPerPlayer||4)));if(isNaN(n)||n<1)n=1;if(n>8)n=8;const deck=makeDeck();const hands={};const order=Object.keys(players);for(const pid of order)hands[pid]=[];for(let c=0;c<n;c++){for(const pid of order){if(deck.length===0) break;hands[pid].push(deck.pop());}}const updateObj={deck,hands,started:true,cardsPerPlayer:n,marks:[]};await update(gameRef,updateObj);});
-
-resetAllBtn.addEventListener('click',async ()=>{const snap=await get(gameRef);const g=snap.exists()?snap.val():null;if(!g) return;if(!g.started){alert('目前無遊戲在進行');return;}const deck=makeDeck();const hands={};const order=Object.keys(g.players||{});const n=g.cardsPerPlayer||4;for(const pid of order)hands[pid]=[];for(let c=0;c<n;c++){for(const pid of order){if(deck.length===0) break;hands[pid].push(deck.pop());}}await update(gameRef,{deck,hands,marks:[],started:true});});
-
-onValue(gameRef,(snapshot)=>{const game=snapshot.exists()?snapshot.val():null;statusEl.textContent='已連線';renderLobby(game);renderGame(game);if(game&&game.marks&&Array.isArray(game.marks)){for(const m of game.marks){applyMarkToUI(m.digit);}}});
-
-(async function tryRejoin(){const snap=await get(gameRef);const g=snap.exists()?snap.val():null;if(!g) return;const players=g.players||{};if(players[myId]){nameInput.value=players[myId].name||nameInput.value;sessionStorage.setItem('myName',players[myId].name||nameInput.value);}})();
-
+// --- 監聽 Database 更新 ---
+onValue(gameRef,(snap)=>{
+  const g=snap.val();
+  if(!g) return;
+  gameStarted=g.gameStarted;
+  playerCardsDiv.innerHTML='';
+  for(const pid in g.players){
+    const div=document.createElement('div');
+    div.innerHTML='<b>'+g.players[pid].nickname+'</b>';
+    const cardsDiv=document.createElement('div');
+    cardsDiv.className='cards';
+    const player=g.players[pid];
+    for(let c of player.cards){
+      const span=document.createElement('div');
+      span.className='card';
+      if(pid!==myId && !player.marked.includes(c)){
+        span.classList.add('hidden');
+        span.textContent='';
+      } else if(player.marked.includes(c)){
+        span.classList.add('marked');
+        span.textContent=c;
+      } else {
+        span.textContent=c;
+      }
+      cardsDiv.appendChild(span);
+    }
+    div.appendChild(cardsDiv);
+    playerCardsDiv.appendChild(div);
+  }
+});
 </script>
 </body>
 </html>
