@@ -1,54 +1,446 @@
 <!DOCTYPE html>
-<html lang="zh-TW">
+<html lang="en">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>撞球賓果遊戲</title>
-<style>
-body { font-family: sans-serif; text-align: center; margin:0; padding:0; }
-input, button, select { font-size: 16px; margin: 5px; }
-#notice { color: red; margin-top: 10px; }
-.cards { display:flex; justify-content:center; margin:10px; flex-wrap: wrap; }
-.card { width:30px; height:40px; border:1px solid #000; margin:2px; display:flex; align-items:center; justify-content:center; font-weight:bold; border-radius:5px; }
-.hidden { background:#ccc; }
-.marked { background:#aaa; color:#fff; }
-.num-btn { width:30px; height:30px; margin:2px; border-radius:50%; border:1px solid #000; font-weight:bold; }
-</style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Pool Poker</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/react@18/umd/react.development.js" crossorigin></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js" crossorigin></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/lucide/0.263.1/lucide.min.js"></script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
+    body { font-family: 'Inter', sans-serif; background-color: #1a202c; color: white; }
+    
+    /* Pool Ball Styles */
+    .ball {
+      box-shadow: inset -2px -2px 6px rgba(0,0,0,0.3), 2px 2px 5px rgba(0,0,0,0.3);
+    }
+    .stripe-ball {
+      background: white;
+      position: relative;
+      overflow: hidden;
+    }
+    .stripe-ball::before {
+      content: '';
+      position: absolute;
+      top: 20%;
+      bottom: 20%;
+      left: 0;
+      right: 0;
+      background: var(--stripe-color);
+    }
+    .stripe-text {
+      position: relative;
+      z-index: 10;
+      background: white;
+      border-radius: 50%;
+      width: 18px;
+      height: 18px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 10px;
+      font-weight: bold;
+      color: black;
+    }
+  </style>
 </head>
 <body>
+  <div id="root"></div>
 
-<h1>撞球賓果遊戲</h1>
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+    import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+    import { getFirestore, doc, onSnapshot, setDoc, updateDoc, arrayUnion } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
-<div id="loginDiv">
-  <input type="text" id="nickname" placeholder="輸入暱稱">
-  <button id="joinBtn">加入房間</button>
-</div>
+    // --- Firebase Configuration ---
+    const firebaseConfig = JSON.parse(typeof __firebase_config !== 'undefined' ? __firebase_config : '{}');
+    const app = initializeApp(firebaseConfig);
+    const auth = getAuth(app);
+    const db = getFirestore(app);
+    const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
 
-<div id="gameDiv" style="display:none;">
-  <div>
-    總玩家數: 
-    <select id="totalPlayersSel">
-      <option value="1">1</option>
-      <option value="2">2</option>
-      <option value="3">3</option>
-      <option value="4">4</option>
-      <option value="5">5</option>
-    </select>
-    <button id="setTotalBtn">設定</button>
-    <button id="startGameBtn">開始遊戲</button>
-    <button id="restartBtn">重新開局</button>
-  </div>
-  <div id="notice"></div>
-  <div id="numButtons"></div>
-  <div id="playerCards"></div>
-</div>
+    const App = () => {
+      const [user, setUser] = React.useState(null);
+      const [gameState, setGameState] = React.useState(null);
+      const [nickname, setNickname] = React.useState('');
+      const [loading, setLoading] = React.useState(true);
+      const [errorMsg, setErrorMsg] = React.useState('');
 
-<!-- Firebase compat (GitHub Pages 可用版本) -->
-<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+      // --- Authentication & Data Sync ---
+      React.useEffect(() => {
+        const initAuth = async () => {
+          try {
+            if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+              await signInWithCustomToken(auth, __initial_auth_token);
+            } else {
+              await signInAnonymously(auth);
+            }
+          } catch (error) {
+            console.error("Auth error:", error);
+            setErrorMsg("Authentication failed. Please refresh.");
+          }
+        };
+        initAuth();
 
-<!-- 你的主要遊戲邏輯 -->
-<script src="script.js?v=3"></script>
+        const unsubscribeAuth = onAuthStateChanged(auth, (currentUser) => {
+          setUser(currentUser);
+          setLoading(false);
+        });
+        return () => unsubscribeAuth();
+      }, []);
 
+      // --- Firestore Listener ---
+      React.useEffect(() => {
+        if (!user) return;
+
+        // Using a single document for the game room
+        const gameDocRef = doc(db, 'artifacts', appId, 'public', 'data', 'pool_poker_room');
+
+        const unsubscribe = onSnapshot(gameDocRef, (docSnap) => {
+          if (docSnap.exists()) {
+            setGameState(docSnap.data());
+          } else {
+            setGameState(null); // Room doesn't exist yet
+          }
+        }, (error) => {
+          console.error("Snapshot error:", error);
+          setErrorMsg("Error syncing game data.");
+        });
+
+        return () => unsubscribe();
+      }, [user]);
+
+      // --- Game Actions ---
+
+      const handleJoin = async () => {
+        if (!nickname.trim()) {
+          setErrorMsg("Please enter a nickname");
+          return;
+        }
+
+        const gameDocRef = doc(db, 'artifacts', appId, 'public', 'data', 'pool_poker_room');
+        
+        try {
+          if (!gameState) {
+            // Create new game
+            await setDoc(gameDocRef, {
+              creatorId: user.uid,
+              totalPlayers: 2,
+              gameStarted: false,
+              cardsPerPlayer: 5,
+              players: {
+                [user.uid]: {
+                  id: user.uid,
+                  nickname: nickname.trim(),
+                  cards: [],
+                  marked: []
+                }
+              },
+              lastUpdated: new Date().toISOString()
+            });
+          } else {
+            // Join existing
+            if (Object.keys(gameState.players || {}).length >= 5) {
+              setErrorMsg("Room is full!");
+              return;
+            }
+            
+            const updatedPlayers = {
+              ...gameState.players,
+              [user.uid]: {
+                id: user.uid,
+                nickname: nickname.trim(),
+                cards: [],
+                marked: []
+              }
+            };
+
+            await updateDoc(gameDocRef, { players: updatedPlayers });
+          }
+          setErrorMsg("");
+        } catch (e) {
+          console.error(e);
+          setErrorMsg("Failed to join game.");
+        }
+      };
+
+      const handleStartGame = async () => {
+        if (gameState.creatorId !== user.uid) return;
+        
+        const playerIds = Object.keys(gameState.players);
+        if (playerIds.length === 0) return;
+
+        // Generate Deck (1-13, 4 copies of each)
+        let deck = [];
+        for (let i = 1; i <= 13; i++) {
+          deck.push(i, i, i, i);
+        }
+        // Shuffle
+        deck = deck.sort(() => Math.random() - 0.5);
+
+        const newPlayers = { ...gameState.players };
+        const cardsPerPlayer = gameState.cardsPerPlayer || 5;
+
+        playerIds.forEach((pid, index) => {
+          newPlayers[pid] = {
+            ...newPlayers[pid],
+            cards: deck.slice(index * cardsPerPlayer, (index + 1) * cardsPerPlayer),
+            marked: []
+          };
+        });
+
+        const gameDocRef = doc(db, 'artifacts', appId, 'public', 'data', 'pool_poker_room');
+        await updateDoc(gameDocRef, {
+          players: newPlayers,
+          gameStarted: true
+        });
+      };
+
+      const handleRestart = async () => {
+        if (gameState.creatorId !== user.uid) return;
+
+        const emptyPlayers = {};
+        Object.keys(gameState.players).forEach(pid => {
+          emptyPlayers[pid] = {
+            ...gameState.players[pid],
+            cards: [],
+            marked: []
+          };
+        });
+
+        const gameDocRef = doc(db, 'artifacts', appId, 'public', 'data', 'pool_poker_room');
+        await updateDoc(gameDocRef, {
+          players: emptyPlayers,
+          gameStarted: false
+        });
+      };
+
+      const handleMarkNumber = async (num) => {
+        if (!gameState?.gameStarted) return;
+        
+        const myData = gameState.players[user.uid];
+        if (!myData) return; // Not a player
+        
+        if (myData.marked.includes(num)) return; // Already marked
+
+        const newMarked = [...myData.marked, num];
+        const gameDocRef = doc(db, 'artifacts', appId, 'public', 'data', 'pool_poker_room');
+        
+        // Update specific player field in the map
+        await updateDoc(gameDocRef, {
+          [`players.${user.uid}.marked`]: newMarked
+        });
+      };
+
+      // --- Helper: Ball Colors ---
+      const getBallStyle = (num) => {
+        const colors = {
+          1: 'yellow', 2: 'blue', 3: 'red', 4: 'purple', 5: 'orange', 6: 'green', 7: 'brown', 8: 'black',
+          9: 'yellow', 10: 'blue', 11: 'red', 12: 'purple', 13: 'orange'
+        };
+        const color = colors[num] || 'gray';
+        const isStripe = num > 8;
+        
+        return { color, isStripe };
+      };
+
+      // --- Render Components ---
+
+      if (loading) return <div className="h-screen flex items-center justify-center text-emerald-400">Loading Pool Hall...</div>;
+
+      const isJoined = gameState && gameState.players && gameState.players[user.uid];
+
+      // LOGIN SCREEN
+      if (!isJoined) {
+        return (
+          <div className="min-h-screen bg-slate-900 flex items-center justify-center p-4">
+            <div className="bg-slate-800 p-8 rounded-2xl shadow-2xl max-w-md w-full border border-slate-700">
+              <h1 className="text-3xl font-bold text-emerald-400 mb-6 text-center flex items-center justify-center gap-2">
+                🎱 Pool Poker
+              </h1>
+              {errorMsg && <div className="bg-red-500/20 text-red-300 p-3 rounded mb-4 text-sm text-center">{errorMsg}</div>}
+              
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-slate-400 text-sm mb-1">Nickname</label>
+                  <input 
+                    type="text" 
+                    value={nickname}
+                    onChange={(e) => setNickname(e.target.value)}
+                    className="w-full bg-slate-900 border border-slate-700 rounded p-3 text-white focus:outline-none focus:border-emerald-500 transition"
+                    placeholder="Enter your name"
+                  />
+                </div>
+                <button 
+                  onClick={handleJoin}
+                  className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-3 rounded transition shadow-lg shadow-emerald-900/50"
+                >
+                  {gameState ? "Join Existing Game" : "Create New Room"}
+                </button>
+              </div>
+              
+              <div className="mt-6 text-xs text-slate-500 text-center">
+                {gameState ? 
+                  `${Object.keys(gameState.players || {}).length} players currently in lobby` : 
+                  "Be the first to create a table!"
+                }
+              </div>
+            </div>
+          </div>
+        );
+      }
+
+      // GAME BOARD
+      const isCreator = gameState.creatorId === user.uid;
+
+      return (
+        <div className="min-h-screen bg-emerald-900 flex flex-col">
+          {/* Header */}
+          <div className="bg-emerald-950/80 p-4 shadow-md backdrop-blur-sm border-b border-emerald-800 flex justify-between items-center sticky top-0 z-50">
+             <div className="flex items-center gap-2">
+                <span className="text-2xl">🎱</span>
+                <h1 className="font-bold hidden sm:block">Pool Poker</h1>
+             </div>
+             
+             <div className="flex gap-2">
+               {isCreator && !gameState.gameStarted && (
+                 <button onClick={handleStartGame} className="bg-yellow-600 hover:bg-yellow-500 text-white px-4 py-2 rounded text-sm font-bold shadow-lg">
+                   Deal Cards
+                 </button>
+               )}
+               {isCreator && (
+                 <button onClick={handleRestart} className="bg-slate-700 hover:bg-slate-600 text-white px-4 py-2 rounded text-sm shadow-lg">
+                   Reset
+                 </button>
+               )}
+             </div>
+          </div>
+
+          {/* Main Content */}
+          <div className="flex-1 p-4 max-w-6xl mx-auto w-full flex flex-col gap-6">
+            
+            {/* Notification Area */}
+            {errorMsg && (
+              <div className="bg-red-500/90 text-white p-3 rounded shadow-lg text-center animate-pulse">
+                {errorMsg}
+              </div>
+            )}
+            {!gameState.gameStarted && (
+               <div className="bg-emerald-800/50 p-4 rounded-lg border border-emerald-700 text-center text-emerald-200">
+                 Waiting for host to deal... ({Object.keys(gameState.players).length} players ready)
+               </div>
+            )}
+
+            {/* Ball Selection Area */}
+            {gameState.gameStarted && (
+              <div className="bg-emerald-950/40 p-6 rounded-3xl border-[12px] border-amber-900 shadow-2xl relative">
+                {/* Pockets visual */}
+                <div className="absolute top-0 left-0 w-8 h-8 bg-black rounded-br-full"></div>
+                <div className="absolute top-0 right-0 w-8 h-8 bg-black rounded-bl-full"></div>
+                <div className="absolute bottom-0 left-0 w-8 h-8 bg-black rounded-tr-full"></div>
+                <div className="absolute bottom-0 right-0 w-8 h-8 bg-black rounded-tl-full"></div>
+                
+                <h2 className="text-center text-emerald-200/50 text-sm mb-4 font-mono uppercase tracking-widest">Select sunk balls</h2>
+                
+                <div className="flex flex-wrap justify-center gap-3 sm:gap-4">
+                  {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13].map((num) => {
+                    const { color, isStripe } = getBallStyle(num);
+                    const isMarked = gameState.players[user.uid]?.marked.includes(num);
+                    
+                    return (
+                      <button
+                        key={num}
+                        onClick={() => handleMarkNumber(num)}
+                        disabled={isMarked}
+                        className={`
+                          w-12 h-12 sm:w-14 sm:h-14 rounded-full flex items-center justify-center font-bold text-sm shadow-xl transition-transform active:scale-95
+                          ${isMarked ? 'opacity-30 grayscale cursor-not-allowed scale-90' : 'hover:scale-110'}
+                          ${isStripe ? 'stripe-ball' : 'ball'}
+                        `}
+                        style={{
+                          backgroundColor: isStripe ? 'white' : color,
+                          '--stripe-color': color,
+                          color: isStripe ? 'black' : (num === 8 ? 'white' : 'white')
+                        }}
+                      >
+                         <span className={isStripe ? 'stripe-text' : ''}>{num}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* Players Hands */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {Object.values(gameState.players).sort((a,b) => a.id === user.uid ? -1 : 1).map((player) => {
+                const isMe = player.id === user.uid;
+                
+                return (
+                  <div key={player.id} className={`
+                    relative p-4 rounded-xl border-2 transition-all duration-300
+                    ${isMe ? 'bg-emerald-800 border-emerald-400 shadow-lg scale-[1.02]' : 'bg-emerald-900/60 border-emerald-800'}
+                  `}>
+                    <div className="flex justify-between items-center mb-3">
+                      <div className="flex items-center gap-2">
+                        <div className={`w-3 h-3 rounded-full ${isMe ? 'bg-green-400' : 'bg-slate-500'}`}></div>
+                        <span className={`font-bold ${isMe ? 'text-white' : 'text-emerald-200'}`}>
+                          {player.nickname} {isMe && '(You)'}
+                        </span>
+                      </div>
+                      <span className="text-xs text-emerald-400 font-mono">
+                        {player.marked?.length || 0} hits
+                      </span>
+                    </div>
+
+                    <div className="flex flex-wrap gap-2 min-h-[60px]">
+                      {gameState.gameStarted && player.cards && player.cards.map((card, idx) => {
+                        const isMarked = player.marked.includes(card);
+                        // Show card if: It's MY card OR it has been marked
+                        const isVisible = isMe || isMarked;
+                        
+                        return (
+                          <div 
+                            key={`${player.id}-${idx}`}
+                            className={`
+                              w-10 h-14 sm:w-12 sm:h-16 rounded flex items-center justify-center text-lg font-bold shadow-sm transition-all duration-500
+                              ${!isVisible 
+                                ? 'bg-emerald-700 border border-emerald-600 opacity-80' // Card Back
+                                : isMarked 
+                                  ? 'bg-yellow-400 text-black border-2 border-yellow-200 scale-105 shadow-yellow-500/50' // Hit Card
+                                  : 'bg-white text-slate-800' // Normal Card
+                              }
+                            `}
+                          >
+                             {isVisible ? card : ''}
+                          </div>
+                        );
+                      })}
+                      
+                      {gameState.gameStarted && (!player.cards || player.cards.length === 0) && (
+                        <div className="text-sm text-emerald-500 italic w-full text-center py-2">No cards dealt</div>
+                      )}
+                      
+                      {!gameState.gameStarted && (
+                        <div className="text-sm text-emerald-500 italic w-full text-center py-2">Waiting...</div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+          </div>
+        </div>
+      );
+    };
+
+    const root = ReactDOM.createRoot(document.getElementById('root'));
+    root.render(<App />);
+  </script>
 </body>
 </html>
+
