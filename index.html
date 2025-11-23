@@ -52,15 +52,34 @@
 
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-    import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-    import { getFirestore, doc, onSnapshot, setDoc, updateDoc, arrayUnion } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+    import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+    import { getFirestore, doc, onSnapshot, setDoc, updateDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+    
+    // -------------------------------------------------------------
+    // IMPORTANT: This configuration is taken from your initial request 
+    // and is now hardcoded for GitHub Pages deployment.
+    // -------------------------------------------------------------
+    const firebaseConfig = {
+      apiKey: "AIzaSyCk54DEp6rzvpfQBBNW_iJByZ3boyHEPF0",
+      authDomain: "poolpokergame-b88ed.firebaseapp.com",
+      projectId: "poolpokergame-b88ed",
+      storageBucket: "poolpokergame-b88ed.appspot.com",
+      messagingSenderId: "574863840102",
+      appId: "1:574863840102:web:14368aaf84b3640c6eeea7"
+    };
+    
+    // Hardcoded unique ID for the public room (since __app_id is unavailable)
+    const PUBLIC_APP_ID = 'pool-poker-game-shared';
 
-    // --- Firebase Configuration ---
-    const firebaseConfig = JSON.parse(typeof __firebase_config !== 'undefined' ? __firebase_config : '{}');
+    // --- Firebase Initialization ---
     const app = initializeApp(firebaseConfig);
     const auth = getAuth(app);
     const db = getFirestore(app);
-    const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+
+    // 啟用匿名登入（適用於公開網站）
+    // 請注意，您需要確保您的 Firestore Security Rules 允許匿名讀寫
+    signInAnonymously(auth).catch(error => console.error("Anonymous Sign-in Failed:", error));
+    // -------------------------------------------------------------
 
     const App = () => {
       const [user, setUser] = React.useState(null);
@@ -71,21 +90,8 @@
 
       // --- Authentication & Data Sync ---
       React.useEffect(() => {
-        const initAuth = async () => {
-          try {
-            if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-              await signInWithCustomToken(auth, __initial_auth_token);
-            } else {
-              await signInAnonymously(auth);
-            }
-          } catch (error) {
-            console.error("Auth error:", error);
-            setErrorMsg("Authentication failed. Please refresh.");
-          }
-        };
-        initAuth();
-
         const unsubscribeAuth = onAuthStateChanged(auth, (currentUser) => {
+          // 在 GitHub Pages 環境中，我們只執行一次匿名登入
           setUser(currentUser);
           setLoading(false);
         });
@@ -96,8 +102,8 @@
       React.useEffect(() => {
         if (!user) return;
 
-        // Using a single document for the game room
-        const gameDocRef = doc(db, 'artifacts', appId, 'public', 'data', 'pool_poker_room');
+        // 使用硬式編碼的路徑來存取公共資料
+        const gameDocRef = doc(db, 'artifacts', PUBLIC_APP_ID, 'public', 'data', 'pool_poker_room');
 
         const unsubscribe = onSnapshot(gameDocRef, (docSnap) => {
           if (docSnap.exists()) {
@@ -107,7 +113,7 @@
           }
         }, (error) => {
           console.error("Snapshot error:", error);
-          setErrorMsg("Error syncing game data.");
+          setErrorMsg("錯誤：無法同步遊戲資料，請檢查您的 Firestore Security Rules 是否允許匿名讀寫。");
         });
 
         return () => unsubscribe();
@@ -117,23 +123,24 @@
 
       const handleJoin = async () => {
         if (!nickname.trim()) {
-          setErrorMsg("Please enter a nickname");
+          setErrorMsg("請輸入暱稱");
           return;
         }
 
-        const gameDocRef = doc(db, 'artifacts', appId, 'public', 'data', 'pool_poker_room');
+        const gameDocRef = doc(db, 'artifacts', PUBLIC_APP_ID, 'public', 'data', 'pool_poker_room');
+        const myId = user.uid;
         
         try {
           if (!gameState) {
             // Create new game
             await setDoc(gameDocRef, {
-              creatorId: user.uid,
+              creatorId: myId,
               totalPlayers: 2,
               gameStarted: false,
               cardsPerPlayer: 5,
               players: {
-                [user.uid]: {
-                  id: user.uid,
+                [myId]: {
+                  id: myId,
                   nickname: nickname.trim(),
                   cards: [],
                   marked: []
@@ -144,14 +151,14 @@
           } else {
             // Join existing
             if (Object.keys(gameState.players || {}).length >= 5) {
-              setErrorMsg("Room is full!");
+              setErrorMsg("房間已滿 (上限 5 人)！");
               return;
             }
             
             const updatedPlayers = {
               ...gameState.players,
-              [user.uid]: {
-                id: user.uid,
+              [myId]: {
+                id: myId,
                 nickname: nickname.trim(),
                 cards: [],
                 marked: []
@@ -162,13 +169,16 @@
           }
           setErrorMsg("");
         } catch (e) {
-          console.error(e);
-          setErrorMsg("Failed to join game.");
+          console.error("Join failed:", e);
+          setErrorMsg("加入遊戲失敗，可能需要檢查網路或權限。");
         }
       };
 
       const handleStartGame = async () => {
-        if (gameState.creatorId !== user.uid) return;
+        if (gameState.creatorId !== user.uid) {
+             setErrorMsg("只有房主可以發牌！");
+             return;
+        }
         
         const playerIds = Object.keys(gameState.players);
         if (playerIds.length === 0) return;
@@ -187,20 +197,25 @@
         playerIds.forEach((pid, index) => {
           newPlayers[pid] = {
             ...newPlayers[pid],
-            cards: deck.slice(index * cardsPerPlayer, (index + 1) * cardsPerPlayer),
+            // 確保不會發超出牌組的牌
+            cards: deck.slice(index * cardsPerPlayer, (index + 1) * cardsPerPlayer), 
             marked: []
           };
         });
 
-        const gameDocRef = doc(db, 'artifacts', appId, 'public', 'data', 'pool_poker_room');
+        const gameDocRef = doc(db, 'artifacts', PUBLIC_APP_ID, 'public', 'data', 'pool_poker_room');
         await updateDoc(gameDocRef, {
           players: newPlayers,
-          gameStarted: true
+          gameStarted: true,
+          notice: '遊戲開始！'
         });
       };
 
       const handleRestart = async () => {
-        if (gameState.creatorId !== user.uid) return;
+        if (gameState.creatorId !== user.uid) {
+             setErrorMsg("只有房主可以重開！");
+             return;
+        }
 
         const emptyPlayers = {};
         Object.keys(gameState.players).forEach(pid => {
@@ -211,27 +226,32 @@
           };
         });
 
-        const gameDocRef = doc(db, 'artifacts', appId, 'public', 'data', 'pool_poker_room');
+        const gameDocRef = doc(db, 'artifacts', PUBLIC_APP_ID, 'public', 'data', 'pool_poker_room');
         await updateDoc(gameDocRef, {
           players: emptyPlayers,
-          gameStarted: false
+          gameStarted: false,
+          notice: '已重新開局'
         });
       };
 
       const handleMarkNumber = async (num) => {
-        if (!gameState?.gameStarted) return;
+        if (!gameState?.gameStarted) {
+            setErrorMsg("遊戲尚未開始。");
+            return;
+        }
         
-        const myData = gameState.players[user.uid];
-        if (!myData) return; // Not a player
+        const myId = user.uid;
+        const myData = gameState.players[myId];
+        if (!myData) return; 
         
-        if (myData.marked.includes(num)) return; // Already marked
+        if (myData.marked.includes(num)) return; 
 
         const newMarked = [...myData.marked, num];
-        const gameDocRef = doc(db, 'artifacts', appId, 'public', 'data', 'pool_poker_room');
+        const gameDocRef = doc(db, 'artifacts', PUBLIC_APP_ID, 'public', 'data', 'pool_poker_room');
         
-        // Update specific player field in the map
         await updateDoc(gameDocRef, {
-          [`players.${user.uid}.marked`]: newMarked
+          [`players.${myId}.marked`]: newMarked,
+          notice: `${myData.nickname} 標記了 ${num} 號球`
         });
       };
 
@@ -249,7 +269,7 @@
 
       // --- Render Components ---
 
-      if (loading) return <div className="h-screen flex items-center justify-center text-emerald-400">Loading Pool Hall...</div>;
+      if (loading || !user) return <div className="h-screen flex items-center justify-center text-emerald-400">正在連接 Firebase...</div>;
 
       const isJoined = gameState && gameState.players && gameState.players[user.uid];
 
@@ -259,33 +279,33 @@
           <div className="min-h-screen bg-slate-900 flex items-center justify-center p-4">
             <div className="bg-slate-800 p-8 rounded-2xl shadow-2xl max-w-md w-full border border-slate-700">
               <h1 className="text-3xl font-bold text-emerald-400 mb-6 text-center flex items-center justify-center gap-2">
-                🎱 Pool Poker
+                🎱 Pool Poker 撞球撲克
               </h1>
               {errorMsg && <div className="bg-red-500/20 text-red-300 p-3 rounded mb-4 text-sm text-center">{errorMsg}</div>}
               
               <div className="space-y-4">
                 <div>
-                  <label className="block text-slate-400 text-sm mb-1">Nickname</label>
+                  <label className="block text-slate-400 text-sm mb-1">暱稱</label>
                   <input 
                     type="text" 
                     value={nickname}
                     onChange={(e) => setNickname(e.target.value)}
                     className="w-full bg-slate-900 border border-slate-700 rounded p-3 text-white focus:outline-none focus:border-emerald-500 transition"
-                    placeholder="Enter your name"
+                    placeholder="輸入您的暱稱"
                   />
                 </div>
                 <button 
                   onClick={handleJoin}
                   className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-3 rounded transition shadow-lg shadow-emerald-900/50"
                 >
-                  {gameState ? "Join Existing Game" : "Create New Room"}
+                  {gameState ? "加入現有遊戲" : "建立新房間"}
                 </button>
               </div>
               
               <div className="mt-6 text-xs text-slate-500 text-center">
                 {gameState ? 
-                  `${Object.keys(gameState.players || {}).length} players currently in lobby` : 
-                  "Be the first to create a table!"
+                  `${Object.keys(gameState.players || {}).length} 位玩家已在等候` : 
+                  "成為第一個開桌的人！"
                 }
               </div>
             </div>
@@ -299,21 +319,21 @@
       return (
         <div className="min-h-screen bg-emerald-900 flex flex-col">
           {/* Header */}
-          <div className="bg-emerald-950/80 p-4 shadow-md backdrop-blur-sm border-b border-emerald-800 flex justify-between items-center sticky top-0 z-50">
-             <div className="flex items-center gap-2">
+          <div className="bg-emerald-950/80 p-4 shadow-md backdrop-blur-sm border-b border-emerald-800 flex flex-col sm:flex-row justify-between items-center sticky top-0 z-50">
+             <div className="flex items-center gap-2 mb-2 sm:mb-0">
                 <span className="text-2xl">🎱</span>
-                <h1 className="font-bold hidden sm:block">Pool Poker</h1>
+                <h1 className="font-bold text-white">Pool Poker</h1>
              </div>
              
-             <div className="flex gap-2">
+             <div className="flex gap-2 text-sm">
                {isCreator && !gameState.gameStarted && (
-                 <button onClick={handleStartGame} className="bg-yellow-600 hover:bg-yellow-500 text-white px-4 py-2 rounded text-sm font-bold shadow-lg">
-                   Deal Cards
+                 <button onClick={handleStartGame} className="bg-yellow-600 hover:bg-yellow-500 text-white px-4 py-2 rounded font-bold shadow-lg">
+                   發牌開始遊戲
                  </button>
                )}
                {isCreator && (
-                 <button onClick={handleRestart} className="bg-slate-700 hover:bg-slate-600 text-white px-4 py-2 rounded text-sm shadow-lg">
-                   Reset
+                 <button onClick={handleRestart} className="bg-slate-700 hover:bg-slate-600 text-white px-4 py-2 rounded shadow-lg">
+                   重開一局
                  </button>
                )}
              </div>
@@ -323,27 +343,27 @@
           <div className="flex-1 p-4 max-w-6xl mx-auto w-full flex flex-col gap-6">
             
             {/* Notification Area */}
-            {errorMsg && (
-              <div className="bg-red-500/90 text-white p-3 rounded shadow-lg text-center animate-pulse">
-                {errorMsg}
+            {(errorMsg || gameState.notice) && (
+              <div className={`p-3 rounded shadow-lg text-center text-sm ${errorMsg ? 'bg-red-500/90 text-white animate-pulse' : 'bg-blue-500/20 text-blue-300'}`}>
+                {errorMsg || gameState.notice}
               </div>
             )}
             {!gameState.gameStarted && (
                <div className="bg-emerald-800/50 p-4 rounded-lg border border-emerald-700 text-center text-emerald-200">
-                 Waiting for host to deal... ({Object.keys(gameState.players).length} players ready)
+                 等待房主發牌... (目前 {Object.keys(gameState.players).length} 位玩家)
                </div>
             )}
 
             {/* Ball Selection Area */}
             {gameState.gameStarted && (
               <div className="bg-emerald-950/40 p-6 rounded-3xl border-[12px] border-amber-900 shadow-2xl relative">
-                {/* Pockets visual */}
+                {/* Pockets visual (裝飾用) */}
                 <div className="absolute top-0 left-0 w-8 h-8 bg-black rounded-br-full"></div>
                 <div className="absolute top-0 right-0 w-8 h-8 bg-black rounded-bl-full"></div>
                 <div className="absolute bottom-0 left-0 w-8 h-8 bg-black rounded-tr-full"></div>
                 <div className="absolute bottom-0 right-0 w-8 h-8 bg-black rounded-tl-full"></div>
                 
-                <h2 className="text-center text-emerald-200/50 text-sm mb-4 font-mono uppercase tracking-widest">Select sunk balls</h2>
+                <h2 className="text-center text-emerald-200/50 text-sm mb-4 font-mono uppercase tracking-widest">點擊以標記擊落的球 (1-13)</h2>
                 
                 <div className="flex flex-wrap justify-center gap-3 sm:gap-4">
                   {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13].map((num) => {
@@ -355,6 +375,7 @@
                         key={num}
                         onClick={() => handleMarkNumber(num)}
                         disabled={isMarked}
+                        title={isMarked ? `已標記 ${num} 號球` : `點擊標記 ${num} 號球`}
                         className={`
                           w-12 h-12 sm:w-14 sm:h-14 rounded-full flex items-center justify-center font-bold text-sm shadow-xl transition-transform active:scale-95
                           ${isMarked ? 'opacity-30 grayscale cursor-not-allowed scale-90' : 'hover:scale-110'}
@@ -388,18 +409,18 @@
                       <div className="flex items-center gap-2">
                         <div className={`w-3 h-3 rounded-full ${isMe ? 'bg-green-400' : 'bg-slate-500'}`}></div>
                         <span className={`font-bold ${isMe ? 'text-white' : 'text-emerald-200'}`}>
-                          {player.nickname} {isMe && '(You)'}
+                          {player.nickname} {isMe && '(您)'}
                         </span>
                       </div>
                       <span className="text-xs text-emerald-400 font-mono">
-                        {player.marked?.length || 0} hits
+                        已擊落 {player.marked?.length || 0} 個目標
                       </span>
                     </div>
 
                     <div className="flex flex-wrap gap-2 min-h-[60px]">
                       {gameState.gameStarted && player.cards && player.cards.map((card, idx) => {
                         const isMarked = player.marked.includes(card);
-                        // Show card if: It's MY card OR it has been marked
+                        // 顯示條件：是自己的卡牌 OR 該號碼已被標記
                         const isVisible = isMe || isMarked;
                         
                         return (
@@ -408,10 +429,10 @@
                             className={`
                               w-10 h-14 sm:w-12 sm:h-16 rounded flex items-center justify-center text-lg font-bold shadow-sm transition-all duration-500
                               ${!isVisible 
-                                ? 'bg-emerald-700 border border-emerald-600 opacity-80' // Card Back
+                                ? 'bg-emerald-700 border border-emerald-600 opacity-80' // 卡背
                                 : isMarked 
-                                  ? 'bg-yellow-400 text-black border-2 border-yellow-200 scale-105 shadow-yellow-500/50' // Hit Card
-                                  : 'bg-white text-slate-800' // Normal Card
+                                  ? 'bg-yellow-400 text-black border-2 border-yellow-200 scale-105 shadow-yellow-500/50' // 擊落的卡
+                                  : 'bg-white text-slate-800' // 自己的卡
                               }
                             `}
                           >
@@ -421,11 +442,11 @@
                       })}
                       
                       {gameState.gameStarted && (!player.cards || player.cards.length === 0) && (
-                        <div className="text-sm text-emerald-500 italic w-full text-center py-2">No cards dealt</div>
+                        <div className="text-sm text-emerald-500 italic w-full text-center py-2">尚未發牌</div>
                       )}
                       
                       {!gameState.gameStarted && (
-                        <div className="text-sm text-emerald-500 italic w-full text-center py-2">Waiting...</div>
+                        <div className="text-sm text-emerald-500 italic w-full text-center py-2">等待中...</div>
                       )}
                     </div>
                   </div>
