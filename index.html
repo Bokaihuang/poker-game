@@ -3,462 +3,507 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>多人 Pool Poker 遊戲大廳</title>
-    <!-- 載入 Tailwind CSS -->
+    <title>井字連線遊戲</title>
+    <!-- 引入 Tailwind CSS CDN -->
     <script src="https://cdn.tailwindcss.com"></script>
-    <script>
-        tailwind.config = {
-            theme: {
-                extend: {
-                    fontFamily: {
-                        sans: ['Inter', 'sans-serif'],
-                    },
-                    colors: {
-                        'poker-green': '#0e6f3b', // Deep felt green
-                        'poker-dark': '#1a202c', // Dark text/background
-                    },
-                    keyframes: {
-                        fadeIn: {
-                            '0%': { opacity: '0', transform: 'translateY(10px)' },
-                            '100%': { opacity: '1', transform: 'translateY(0)' },
-                        }
-                    },
-                    animation: {
-                        fadeIn: 'fadeIn 0.5s ease-out',
-                    }
-                }
-            }
-        }
-    </script>
     <style>
-        .card-shadow {
-            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+        /* 使用 Inter 字體 */
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f7f9fb;
         }
-        .pool-button {
-            transition: all 0.2s ease-in-out;
-            text-shadow: 1px 1px 2px rgba(0,0,0,0.3);
+        .board-cell {
+            width: 100%;
+            height: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 3rem;
+            font-weight: bold;
+            cursor: pointer;
+            transition: background-color 0.2s;
+            background-color: #fff;
+            border-radius: 0.5rem;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
         }
-        .pool-button:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 8px 25px rgba(14, 111, 59, 0.7);
+        .board-cell:hover:not(.occupied) {
+            background-color: #f0f4f8;
         }
-        .spinner {
-            border-top-color: #f3f3f3;
-            border-right-color: #f3f3f3;
-            border-bottom-color: #f3f3f3;
-            border-left-color: #0e6f3b;
-            animation: spin 1s linear infinite;
+        .occupied {
+            cursor: default;
         }
-        @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
+        .symbol-x {
+            color: #ef4444; /* Red 500 */
         }
-        .game-status-pill {
-            padding: 4px 12px;
-            border-radius: 9999px;
-            font-size: 0.75rem;
-            font-weight: 600;
-            text-transform: uppercase;
+        .symbol-o {
+            color: #3b82f6; /* Blue 500 */
         }
     </style>
 </head>
-<body class="bg-gray-900 min-h-screen font-sans p-4 md:p-10 text-white">
+<body class="p-4 md:p-8 min-h-screen flex items-start justify-center">
 
-    <div class="max-w-5xl mx-auto">
-        <header class="text-center mb-10">
-            <h1 class="text-5xl font-extrabold tracking-tight text-poker-green">♠️ Pool Poker 大廳 ♣️</h1>
-            <p class="text-gray-400 mt-2">
-                使用者 ID: 
-                <span id="user-id-display" class="font-mono text-xs bg-gray-800 p-1 rounded break-all text-yellow-300">正在驗證連線...</span>
+    <div id="app" class="w-full max-w-lg bg-white p-6 md:p-8 rounded-xl shadow-2xl space-y-6">
+        <h1 class="text-3xl font-extrabold text-gray-800 text-center border-b pb-3 mb-4">
+            即時多人井字遊戲
+        </h1>
+
+        <!-- 身份驗證區塊 -->
+        <div id="auth-status" class="bg-indigo-100 border-l-4 border-indigo-500 text-indigo-700 p-4 rounded-lg" role="alert">
+            <p id="connection-message" class="font-bold">正在驗證連線...</p>
+            <p id="user-id-display" class="text-sm break-all mt-1"></p>
+        </div>
+
+        <!-- 遊戲操作區塊 -->
+        <div id="game-controls" class="space-y-4">
+            <button id="create-game-btn" onclick="createGame()" class="w-full bg-green-600 hover:bg-green-700 text-white font-semibold py-3 rounded-lg shadow-md transition duration-150 ease-in-out disabled:opacity-50" disabled>
+                創建新遊戲 (你的符號是 X)
+            </button>
+            <div class="flex items-center space-x-2">
+                <input type="text" id="game-id-input" placeholder="輸入遊戲 ID" class="flex-grow p-3 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500" />
+                <button id="join-game-btn" onclick="joinGame()" class="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-6 rounded-lg shadow-md transition duration-150 ease-in-out disabled:opacity-50" disabled>
+                    加入遊戲
+                </button>
+            </div>
+            <p id="current-game-id" class="text-center text-sm font-medium text-gray-600 hidden">
+                當前遊戲 ID: <span class="font-mono text-indigo-700 text-base" id="display-game-id"></span>
             </p>
-        </header>
+        </div>
 
-        <!-- 狀態與控制區塊 -->
-        <div id="app-content">
-            <div id="auth-status" class="bg-red-800 text-white p-4 rounded-xl mb-6 hidden">
-                <p id="auth-message" class="font-semibold">正在等待連線...</p>
-            </div>
+        <!-- 遊戲狀態區塊 -->
+        <div id="game-info" class="text-center p-3 bg-yellow-100 text-yellow-800 rounded-lg shadow-inner hidden">
+            <p id="player-role" class="font-bold text-lg mb-1"></p>
+            <p id="game-status" class="text-xl font-extrabold"></p>
+        </div>
 
-            <!-- 遊戲操作區塊 -->
-            <div id="lobby-controls" class="bg-gray-800 p-6 rounded-xl card-shadow mb-8">
-                <h2 class="text-2xl font-semibold text-white mb-4">創建或加入遊戲</h2>
-                <button id="create-game-btn" class="pool-button bg-poker-green text-white font-bold py-3 px-8 rounded-xl w-full md:w-auto hover:bg-green-700 disabled:opacity-50 flex items-center justify-center">
-                    <span id="create-btn-text">創建新遊戲</span>
-                    <div id="create-btn-spinner" class="hidden spinner w-5 h-5 border-2 rounded-full ml-3"></div>
-                </button>
-            </div>
-
-            <!-- 遊戲列表區塊 -->
-            <div class="bg-gray-800 p-6 rounded-xl card-shadow">
-                <h2 class="text-2xl font-semibold text-white mb-4 flex items-center">
-                    開放中的 Pool Poker 遊戲
-                    <span id="loading-indicator" class="hidden text-sm text-poker-green ml-3 flex items-center">
-                        <div class="spinner w-4 h-4 border-2 rounded-full mr-1"></div>
-                        載入中...
-                    </span>
-                </h2>
-                <div id="games-list" class="space-y-4">
-                    <p id="no-games-message" class="text-gray-500 italic">目前沒有進行中的遊戲，請創建一個。</p>
-                </div>
+        <!-- 遊戲棋盤區塊 -->
+        <div id="game-board-container" class="mt-6 hidden">
+            <div id="game-board" class="grid grid-cols-3 grid-rows-3 gap-2 aspect-square p-2 bg-gray-200 rounded-xl shadow-inner">
+                <!-- Cell content will be generated here -->
             </div>
         </div>
-        
-        <!-- 訊息彈出區塊 (用於代替 alert/confirm) -->
-        <div id="message-modal" class="hidden fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50 transition-opacity duration-300">
-            <div class="bg-gray-800 p-8 rounded-2xl shadow-2xl w-full max-w-sm transform scale-100 transition-transform duration-300 card-shadow">
-                <h3 id="modal-title" class="text-2xl font-bold mb-3 text-red-400">錯誤</h3>
-                <p id="modal-message" class="text-gray-300 mb-6">發生了一個未知的錯誤。</p>
-                <button onclick="document.getElementById('message-modal').classList.add('hidden')" class="bg-gray-700 hover:bg-gray-600 text-white font-bold py-2 px-4 rounded-xl w-full transition pool-button">
-                    確定
-                </button>
-            </div>
-        </div>
+
+        <!-- 錯誤或提示訊息 -->
+        <div id="message-box" class="mt-4 p-3 text-sm text-red-700 bg-red-100 border border-red-200 rounded-lg hidden"></div>
     </div>
 
-    <!-- 載入 Firebase 模組 -->
+    <!-- Firebase SDK 引入 -->
     <script type="module">
+        // 1. Firebase 服務和工具導入
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
         import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { getFirestore, collection, addDoc, onSnapshot, query, setLogLevel, serverTimestamp, doc, setDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { getFirestore, doc, setDoc, onSnapshot, updateDoc, collection, query, where, getDocs, runTransaction } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { setLogLevel } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
-        // =========================================================================
-        // !!! IMPORTANT: 外部部署配置區塊 !!!
-        // 如果您在 Canvas 以外的地方運行此檔案 (例如 GitHub Pages 或本地端)，
-        // 請將您的 Firebase 公共配置 (從 Firebase Console 取得) 貼到下方變數中，
-        // 否則應用程式將顯示「缺少 Firebase 設定檔！」的錯誤。
-        // =========================================================================
-        const YOUR_FIREBASE_CONFIG = {
-            apiKey: "YOUR_API_KEY", // <-- 請在此貼上您的 apiKey
-            authDomain: "YOUR_PROJECT_ID.firebaseapp.com", // <-- 請在此貼上您的 authDomain
-            projectId: "YOUR_PROJECT_ID", // <-- 請在此貼上您的 projectId
-            storageBucket: "YOUR_PROJECT_ID.appspot.com",
-            messagingSenderId: "YOUR_SENDER_ID",
-            appId: "YOUR_APP_ID"
-            // measurementId: "G-XXXXXXXXXX" // 如果需要
-        };
-        // =========================================================================
+        // 設置日誌級別為 Debug 以便調試
+        setLogLevel('Debug');
 
-
-        // 全域變數檢查 (由 Canvas 環境提供)
-        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
-        const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
-
-        let firebaseConfig = null;
-        // 檢查 Canvas 環境變數
-        if (typeof __firebase_config !== 'undefined' && __firebase_config) {
-            try {
-                // 如果 Canvas 變數存在，則使用它
-                firebaseConfig = JSON.parse(__firebase_config);
-            } catch (e) {
-                console.error("無法解析 __firebase_config, 使用手動配置。", e);
-            }
-        }
-        
-        // 如果 Canvas 配置不存在或解析失敗，則使用手動配置
-        if (!firebaseConfig || firebaseConfig.projectId === 'placeholder') {
-            // 檢查手動配置是否已填寫
-            if (YOUR_FIREBASE_CONFIG.apiKey.includes("YOUR_API_KEY")) {
-                // 致命錯誤：手動配置也未填寫
-                window.onload = () => showMessage('致命錯誤', '缺少 Firebase 設定檔！如果您在外部運行，請編輯程式碼並填入您的 Firebase 配置 (YOUR_FIREBASE_CONFIG)。');
-                // 修復 Illegal return statement 錯誤：移除頂層 return，並將 firebaseConfig 設為 null
-                firebaseConfig = null; 
-            } else {
-                // 手動配置有效
-                firebaseConfig = YOUR_FIREBASE_CONFIG;
-            }
-        }
-
-
-        // 全域 Firebase 實例和使用者資訊
+        // 2. 全域變量與 Firebase 初始化
+        let app;
         let db;
         let auth;
         let userId = null;
-        let isAuthReady = false;
+        let userSymbol = null; // 'X' or 'O'
+        let currentGameId = null;
+        let unsubscribe = null; // 用於儲存 onSnapshot 的取消訂閱函數
 
-        // DOM 元素 (省略重複定義)
-        const userIdDisplay = document.getElementById('user-id-display');
-        const createGameBtn = document.getElementById('create-game-btn');
-        const createBtnText = document.getElementById('create-btn-text');
-        const createBtnSpinner = document.getElementById('create-btn-spinner');
-        const gamesListContainer = document.getElementById('games-list');
-        const noGamesMessage = document.getElementById('no-games-message');
-        const loadingIndicator = document.getElementById('loading-indicator');
-        const authStatusDiv = document.getElementById('auth-status');
-        const authMessage = document.getElementById('auth-message');
+        // 從環境變量獲取配置
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+        const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : null;
+        const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
+        
+        // 應用程式 DOM 元素
+        const connMessageEl = document.getElementById('connection-message');
+        const userIdDisplayEl = document.getElementById('user-id-display');
+        const createBtn = document.getElementById('create-game-btn');
+        const joinBtn = document.getElementById('join-game-btn');
+        const gameIdInput = document.getElementById('game-id-input');
+        const boardEl = document.getElementById('game-board');
+        const gameInfoEl = document.getElementById('game-info');
+        const playerRoleEl = document.getElementById('player-role');
+        const gameStatusEl = document.getElementById('game-status');
+        const boardContainerEl = document.getElementById('game-board-container');
+        const messageBoxEl = document.getElementById('message-box');
+        const currentGameIdEl = document.getElementById('current-game-id');
+        const displayGameIdEl = document.getElementById('display-game-id');
 
-        // 訊息顯示函數 (代替 alert)
-        function showMessage(title, message, isError = true) {
-            document.getElementById('modal-title').textContent = title;
-            document.getElementById('modal-message').textContent = message;
-            document.getElementById('modal-title').className = isError 
-                ? 'text-2xl font-bold mb-3 text-red-400' 
-                : 'text-2xl font-bold mb-3 text-poker-green';
-            document.getElementById('message-modal').classList.remove('hidden');
+
+        // 顯示錯誤訊息
+        function showMessage(msg, isError = true) {
+            messageBoxEl.textContent = msg;
+            messageBoxEl.classList.remove('hidden', 'text-green-700', 'bg-green-100', 'text-red-700', 'bg-red-100', 'border-red-200', 'border-green-200');
+            messageBoxEl.classList.add(isError ? 'text-red-700' : 'text-green-700', isError ? 'bg-red-100' : 'bg-green-100', isError ? 'border-red-200' : 'border-green-200');
+            messageBoxEl.classList.remove('hidden');
         }
 
-        // ===============================================
-        // ========== 1. Firebase 初始化與驗證 ==========
-        // ===============================================
+        // 隱藏訊息
+        function hideMessage() {
+            messageBoxEl.classList.add('hidden');
+        }
 
+        // 渲染遊戲棋盤
+        function renderBoard(gameData) {
+            boardEl.innerHTML = ''; // 清空棋盤
+            
+            // 檢查是否所有必要的元素都已加載
+            if (!gameData || !gameData.board) {
+                boardEl.innerHTML = '<div class="col-span-3 text-center text-gray-500">等待遊戲數據...</div>';
+                return;
+            }
+
+            gameData.board.forEach((cell, index) => {
+                const cellEl = document.createElement('div');
+                cellEl.className = `board-cell ${cell ? 'occupied' : ''}`;
+                cellEl.dataset.index = index;
+                cellEl.innerHTML = cell ? `<span class="symbol-${cell.toLowerCase()}">${cell}</span>` : '';
+
+                const isMyTurn = gameData.currentPlayer === userSymbol;
+                const canMove = !cell && isMyTurn && gameData.status === '進行中';
+
+                if (canMove) {
+                    cellEl.onclick = () => window.makeMove(index);
+                } else if (!cell && gameData.status === '進行中' && !isMyTurn) {
+                    // 提示非當前玩家的回合
+                    cellEl.style.cursor = 'wait';
+                }
+
+                boardEl.appendChild(cellEl);
+            });
+        }
+
+        // 監聽遊戲狀態更新並更新 UI
+        function handleGameUpdate(gameData) {
+            if (!gameData) return;
+
+            // 1. 渲染棋盤
+            renderBoard(gameData);
+
+            // 2. 更新遊戲資訊區塊
+            gameInfoEl.classList.remove('hidden');
+
+            // 設置玩家角色
+            playerRoleEl.textContent = `你是 ${userSymbol}`;
+            playerRoleEl.classList.remove('text-red-500', 'text-blue-500');
+            playerRoleEl.classList.add(userSymbol === 'X' ? 'text-red-500' : 'text-blue-500');
+
+
+            // 設置遊戲狀態
+            let statusText = '';
+            let statusClasses = 'font-extrabold';
+
+            if (gameData.status === '進行中') {
+                const isMyTurn = gameData.currentPlayer === userSymbol;
+                statusText = isMyTurn ? '輪到你 (點擊方格)' : `輪到 ${gameData.currentPlayer} (等待中)`;
+                statusClasses += isMyTurn ? ' text-green-600' : ' text-gray-600';
+            } else if (gameData.status === '平局') {
+                statusText = '遊戲結束：平局！';
+                statusClasses += ' text-purple-600';
+            } else if (gameData.status === 'X 獲勝' || gameData.status === 'O 獲勝') {
+                statusText = `遊戲結束: ${gameData.status}!`;
+                statusClasses += ' text-red-600';
+            } else if (gameData.status === '等待玩家') {
+                 // 檢查玩家是否只有一人
+                const players = gameData.players || {};
+                const playerCount = Object.keys(players).length;
+
+                if (playerCount === 1) {
+                    statusText = '等待另一位玩家加入...';
+                    statusClasses += ' text-orange-600';
+                } else {
+                    statusText = '遊戲已準備好開始！';
+                    statusClasses += ' text-green-600';
+                }
+            }
+
+            gameStatusEl.textContent = statusText;
+            gameStatusEl.className = statusClasses;
+        }
+
+        // 3. Firebase 初始化和身份驗證
         async function initFirebase() {
+            if (!firebaseConfig) {
+                connMessageEl.textContent = '錯誤: Firebase 配置未定義。';
+                connMessageEl.classList.replace('bg-indigo-100', 'bg-red-100');
+                connMessageEl.classList.replace('border-indigo-500', 'border-red-500');
+                connMessageEl.classList.replace('text-indigo-700', 'text-red-700');
+                return;
+            }
+
             try {
-                // 初始化 Firebase 應用程式
-                const app = initializeApp(firebaseConfig);
-                auth = getAuth(app);
-                
-                // 啟用 Firestore Debug Log (有助於偵錯安全規則)
-                setLogLevel('debug'); 
+                // 初始化 Firebase
+                app = initializeApp(firebaseConfig);
                 db = getFirestore(app);
+                auth = getAuth(app);
+                window.db = db; // 設置全域可訪問，供 makeMove 使用
 
                 // 處理身份驗證
-                authStatusDiv.classList.remove('hidden');
-                authStatusDiv.className = 'bg-yellow-800 text-white p-4 rounded-xl mb-6';
-                authMessage.textContent = '正在進行身份驗證...';
-
                 if (initialAuthToken) {
-                    // 使用 Canvas 提供的自定義 Token 登入
                     await signInWithCustomToken(auth, initialAuthToken);
                 } else {
-                    // 如果沒有 Token，則匿名登入 (適用於外部部署)
+                    // 如果沒有提供 token，則匿名登入
                     await signInAnonymously(auth);
                 }
 
-                // 監聽身份驗證狀態變化
+                // 設置身份驗證狀態監聽器
                 onAuthStateChanged(auth, (user) => {
                     if (user) {
                         userId = user.uid;
-                        userIdDisplay.textContent = userId;
-                        isAuthReady = true;
+                        connMessageEl.textContent = '✅ 已連線 (身份驗證完成)';
+                        connMessageEl.classList.replace('bg-indigo-100', 'bg-green-100');
+                        connMessageEl.classList.replace('border-indigo-500', 'border-green-500');
+                        connMessageEl.classList.replace('text-indigo-700', 'text-green-700');
+                        userIdDisplayEl.textContent = `你的 User ID (分享給其他人): ${userId}`;
                         
-                        // 驗證成功 UI 更新
-                        authStatusDiv.classList.add('hidden');
-                        createGameBtn.disabled = false;
-                        listenForGames();
-                        console.log("Authentication complete. User ID:", userId);
-                        
+                        // 啟用遊戲控制
+                        createBtn.disabled = false;
+                        joinBtn.disabled = false;
+
+                        console.log('User authenticated with ID:', userId);
                     } else {
-                        userIdDisplay.textContent = '未登入 (匿名)';
-                        authStatusDiv.className = 'bg-red-800 text-white p-4 rounded-xl mb-6';
-                        authMessage.textContent = '警告: 身份驗證失敗或已登出。無法創建遊戲。';
-                        createGameBtn.disabled = true;
-                        isAuthReady = true;
+                        // 雖然我們強制匿名登入，但以防萬一
+                        connMessageEl.textContent = '❌ 連線錯誤: 請嘗試重新整理';
+                        connMessageEl.classList.replace('bg-indigo-100', 'bg-red-100');
+                        connMessageEl.classList.replace('border-indigo-500', 'border-red-500');
+                        connMessageEl.classList.replace('text-indigo-700', 'text-red-700');
+                        userId = null;
+                        createBtn.disabled = true;
+                        joinBtn.disabled = true;
                     }
                 });
 
             } catch (error) {
-                console.error("Firebase 初始化/連線發生致命錯誤:", error);
-                authStatusDiv.className = 'bg-red-800 text-white p-4 rounded-xl mb-6';
-                authMessage.textContent = `連線 Firebase 失敗: ${error.message}`;
-            }
-        }
-
-        // ===============================================
-        // ========== 2. 遊戲資料操作函數 ==========
-        // ===============================================
-
-        // 取得 Pool Poker 遊戲集合的引用 (公開路徑)
-        function getGamesCollectionRef() {
-            // 路徑: /artifacts/{appId}/public/data/games
-            return collection(db, 'artifacts', appId, 'public', 'data', 'games');
-        }
-
-        // 創建新遊戲
-        async function createNewGame() {
-            if (!isAuthReady || !userId) {
-                showMessage('權限錯誤', '請等待身份驗證完成。');
-                return;
-            }
-
-            createGameBtn.disabled = true;
-            createBtnText.textContent = '正在創建...';
-            createBtnSpinner.classList.remove('hidden');
-
-            try {
-                // 遊戲初始狀態
-                const gameName = `Pool Poker #${Math.floor(Math.random() * 9000) + 1000}`;
-                const maxPlayers = 4;
-                
-                const newGame = {
-                    creatorId: userId,
-                    createdAt: serverTimestamp(),
-                    gameName: gameName,
-                    status: 'waiting', 
-                    players: [
-                        { userId: userId, name: `玩家 ${userId.substring(0, 4)}`, chips: 1000 }
-                    ],
-                    maxPlayers: maxPlayers,
-                    poolAmount: 0,
-                };
-
-                const docRef = await addDoc(getGamesCollectionRef(), newGame);
-                
-                showMessage('遊戲創建成功', `您已成功創建遊戲: ${gameName}。ID: ${docRef.id}`, false);
-
-            } catch (e) {
-                console.error("創建遊戲時發生錯誤: ", e);
-                showMessage('創建失敗', `無法創建遊戲。錯誤: ${e.message}`);
-            } finally {
-                createBtnSpinner.classList.add('hidden');
-                createBtnText.textContent = '創建新遊戲';
-                createGameBtn.disabled = false;
+                console.error("Firebase Initialization/Authentication Error:", error);
+                connMessageEl.textContent = `❌ 連線失敗: ${error.message}`;
+                connMessageEl.classList.replace('bg-indigo-100', 'bg-red-100');
+                connMessageEl.classList.replace('border-indigo-500', 'border-red-500');
+                connMessageEl.classList.replace('text-indigo-700', 'text-red-700');
             }
         }
         
-        // 渲染單個遊戲列表項
-        function renderGameItem(game, gameId) {
-            const playerCount = game.players ? game.players.length : 0;
-            const item = document.createElement('div');
-            item.className = 'bg-gray-700 p-4 rounded-xl flex flex-col md:flex-row items-start md:items-center justify-between card-shadow transition duration-200 hover:bg-gray-600 animation-fadeIn';
-            
-            let statusColor = '';
-            let statusText = '';
-            let isJoinable = false;
+        // 4. 遊戲功能
 
-            switch(game.status) {
-                case 'waiting':
-                    statusColor = 'bg-blue-600 text-blue-100';
-                    statusText = '等待中';
-                    isJoinable = playerCount < game.maxPlayers;
-                    break;
-                case 'in_progress':
-                    statusColor = 'bg-red-600 text-red-100';
-                    statusText = '進行中';
-                    break;
-                case 'finished':
-                    statusColor = 'bg-gray-500 text-gray-100';
-                    statusText = '已結束';
-                    break;
-                default:
-                    statusColor = 'bg-yellow-600 text-yellow-100';
-                    statusText = '未知狀態';
+        // 檢查勝利條件
+        function checkWin(board) {
+            const lines = [
+                [0, 1, 2], [3, 4, 5], [6, 7, 8], // rows
+                [0, 3, 6], [1, 4, 7], [2, 5, 8], // columns
+                [0, 4, 8], [2, 4, 6], // diagonals
+            ];
+
+            for (let i = 0; i < lines.length; i++) {
+                const [a, b, c] = lines[i];
+                if (board[a] && board[a] === board[b] && board[a] === board[c]) {
+                    return board[a]; // 返回獲勝者的符號 ('X' or 'O')
+                }
             }
-            
-            const isFull = playerCount >= (game.maxPlayers || 4);
-            // 檢查用戶是否已在遊戲中
-            const isInGame = game.players && game.players.some(p => p.userId === userId);
-            const joinButtonDisabled = !isJoinable || isFull || isInGame;
-
-            // 創建遊戲資訊 HTML
-            item.innerHTML = `
-                <div class="mb-3 md:mb-0">
-                    <p class="text-xl font-bold text-white mb-1">${game.gameName || '未命名遊戲'}</p>
-                    <p class="text-sm text-gray-400">
-                        創建者: ${game.creatorId.substring(0, 8)}... | 遊戲ID: ${gameId.substring(0, 8)}...
-                    </p>
-                    <div class="mt-2 text-sm">
-                        <span class="${statusColor} game-status-pill">${statusText}</span>
-                        <span class="bg-indigo-600 text-indigo-100 game-status-pill ml-2">
-                            ${playerCount}/${game.maxPlayers || 4} 玩家
-                        </span>
-                    </div>
-                </div>
-                <button data-game-id="${gameId}" 
-                        class="join-game-btn bg-yellow-500 text-gray-900 font-bold py-2 px-6 rounded-xl hover:bg-yellow-400 disabled:opacity-30 pool-button w-full md:w-auto mt-3 md:mt-0" 
-                        ${joinButtonDisabled ? 'disabled' : ''}>
-                    ${isInGame ? '已在遊戲中' : (isFull ? '人數已滿' : '加入遊戲')}
-                </button>
-            `;
-            
-            // 為加入按鈕添加事件監聽器
-            const joinBtn = item.querySelector('.join-game-btn');
-            if (joinBtn) {
-                joinBtn.addEventListener('click', () => joinGame(gameId, game));
-            }
-
-            return item;
+            return null;
         }
 
-        // 監聽所有遊戲列表 (即時更新)
-        function listenForGames() {
-            if (!isAuthReady || !db) return;
+        // 檢查平局
+        function checkDraw(board) {
+            return !checkWin(board) && board.every(cell => cell !== null);
+        }
 
-            loadingIndicator.classList.remove('hidden');
-            const gamesQuery = query(getGamesCollectionRef());
+        // 開始監聽 Firestore 上的特定遊戲
+        function startListeningToGame(gameId) {
+            if (unsubscribe) {
+                unsubscribe(); // 停止舊的監聽
+            }
+            
+            currentGameId = gameId;
+            const gameRef = doc(db, 'artifacts', appId, 'public', 'data', 'tictactoe', gameId);
+            
+            // 顯示遊戲 ID
+            displayGameIdEl.textContent = gameId;
+            currentGameIdEl.classList.remove('hidden');
+            boardContainerEl.classList.remove('hidden');
+            hideMessage();
 
-            // 設置 Firestore 監聽器
-            onSnapshot(gamesQuery, (snapshot) => {
-                loadingIndicator.classList.add('hidden');
-                gamesListContainer.innerHTML = ''; 
-                
-                if (snapshot.empty) {
-                    noGamesMessage.classList.remove('hidden');
-                    gamesListContainer.appendChild(noGamesMessage);
-                    return;
+            unsubscribe = onSnapshot(gameRef, (docSnap) => {
+                if (docSnap.exists()) {
+                    const gameData = docSnap.data();
+                    handleGameUpdate(gameData);
+                } else {
+                    showMessage('遊戲不存在或已結束。', true);
+                    resetGameState();
                 }
-                
-                noGamesMessage.classList.add('hidden');
-                
-                snapshot.forEach(doc => {
-                    const gameData = doc.data();
-                    const gameId = doc.id;
-                    const gameItem = renderGameItem(gameData, gameId);
-                    gamesListContainer.appendChild(gameItem);
-                });
-
-                console.log("Game list updated successfully.");
-
             }, (error) => {
-                console.error("監聽遊戲列表發生錯誤:", error);
-                showMessage('數據錯誤', `無法即時同步遊戲列表: ${error.message}`);
+                console.error("Firestore onSnapshot error:", error);
+                showMessage(`資料庫錯誤: ${error.message}`, true);
+                resetGameState();
             });
         }
+
+        // 重置本地遊戲狀態
+        function resetGameState() {
+            if (unsubscribe) {
+                unsubscribe();
+                unsubscribe = null;
+            }
+            currentGameId = null;
+            userSymbol = null;
+            currentGameIdEl.classList.add('hidden');
+            boardContainerEl.classList.add('hidden');
+            gameInfoEl.classList.add('hidden');
+            renderBoard({ board: Array(9).fill(null) });
+        }
         
-        // 加入遊戲邏輯
-        async function joinGame(gameId, game) {
-            if (!isAuthReady || !userId) {
-                showMessage('權限錯誤', '請等待身份驗證完成。');
-                return;
-            }
-
-            // 檢查是否已在遊戲中
-            if (game.players.some(p => p.userId === userId)) {
-                showMessage('重複加入', '您已經是此遊戲的玩家了！', false);
+        // 創建新遊戲 (X 玩家)
+        window.createGame = async function() {
+            if (!userId) {
+                showMessage('請等待身份驗證完成。', true);
                 return;
             }
             
-            // 檢查是否已滿員 (雙重檢查)
-            const playerCount = game.players ? game.players.length : 0;
-            if (playerCount >= (game.maxPlayers || 4)) {
-                 showMessage('人數已滿', '遊戲人數已滿，無法加入。');
-                return;
-            }
-
-            const gameDocRef = doc(db, 'artifacts', appId, 'public', 'data', 'games', gameId);
-            
-            const newPlayer = { 
-                userId: userId, 
-                name: `玩家 ${userId.substring(0, 4)}`,
-                chips: 1000 // 初始籌碼
-            };
-            const newPlayersArray = [...game.players, newPlayer];
-
             try {
-                // 使用 setDoc 並帶上 { merge: true } 來安全地更新陣列
-                await setDoc(gameDocRef, { players: newPlayersArray }, { merge: true });
-                showMessage('加入成功', `成功加入遊戲: ${game.gameName}!`, false);
-            } catch (e) {
-                console.error("加入遊戲時發生錯誤: ", e);
-                showMessage('加入失敗', `無法加入遊戲。錯誤: ${e.message}`);
+                // 創建一個新的遊戲 ID (使用 UUID 或時間戳組合)
+                const newGameId = `game-${Date.now().toString(36).toUpperCase()}`; 
+                const gameRef = doc(db, 'artifacts', appId, 'public', 'data', 'tictactoe', newGameId);
+                
+                // 初始遊戲狀態
+                const initialData = {
+                    board: Array(9).fill(null), // 9個單元的棋盤
+                    currentPlayer: 'X',
+                    status: '等待玩家',
+                    players: {
+                        'X': userId,
+                    },
+                    createdAt: new Date().getTime(),
+                };
+
+                await setDoc(gameRef, initialData);
+                
+                // 設置為 X 玩家並開始監聽
+                userSymbol = 'X';
+                startListeningToGame(newGameId);
+                showMessage(`✅ 遊戲 [${newGameId}] 創建成功！分享此 ID 給朋友`, false);
+
+            } catch (error) {
+                console.error("Error creating game:", error);
+                showMessage(`創建遊戲失敗: ${error.message}`, true);
             }
         }
 
-
-        // ===============================================
-        // ========== 3. 事件監聽器與啟動 ==========
-        // ===============================================
-        
-        createGameBtn.addEventListener('click', createNewGame);
-
-        // 啟動初始化流程
-        window.onload = () => {
-            if (!firebaseConfig || firebaseConfig.apiKey.includes("YOUR_API_KEY")) {
-                // 由於前面已經終止腳本並顯示錯誤，這裡只是確認。
-                return; 
+        // 加入現有遊戲 (O 玩家)
+        window.joinGame = async function() {
+            if (!userId) {
+                showMessage('請等待身份驗證完成。', true);
+                return;
             }
-            createGameBtn.disabled = true; // 預設禁用，等待認證
-            initFirebase();
-        };
 
+            const gameId = gameIdInput.value.trim().toUpperCase();
+            if (!gameId) {
+                showMessage('請輸入有效的遊戲 ID。', true);
+                return;
+            }
+            
+            const gameRef = doc(db, 'artifacts', appId, 'public', 'data', 'tictactoe', gameId);
+
+            try {
+                // 使用交易確保原子性 (避免多個用戶同時加入)
+                await runTransaction(db, async (transaction) => {
+                    const gameDoc = await transaction.get(gameRef);
+
+                    if (!gameDoc.exists()) {
+                        throw new Error("遊戲 ID 不存在。");
+                    }
+
+                    const gameData = gameDoc.data();
+                    const players = gameData.players || {};
+
+                    if (players['X'] && players['O']) {
+                        throw new Error("遊戲已滿，無法加入。");
+                    }
+                    
+                    if (players['X'] === userId || players['O'] === userId) {
+                        // 已經在遊戲中，直接開始監聽
+                        userSymbol = players['X'] === userId ? 'X' : 'O';
+                        return;
+                    }
+
+                    if (!players['X']) {
+                        // 理論上不應該發生，但以防萬一
+                        players['X'] = userId;
+                        userSymbol = 'X';
+                    } else {
+                        // 加入 O 玩家
+                        players['O'] = userId;
+                        userSymbol = 'O';
+                        gameData.status = '進行中'; // 兩個玩家到齊，遊戲開始
+                    }
+
+                    gameData.players = players;
+                    transaction.update(gameRef, gameData);
+                });
+                
+                startListeningToGame(gameId);
+                showMessage(`✅ 成功加入遊戲 [${gameId}]！你的符號是 ${userSymbol}`, false);
+
+            } catch (error) {
+                console.error("Error joining game:", error);
+                showMessage(`加入遊戲失敗: ${error.message}`, true);
+            }
+        }
+
+        // 進行移動
+        window.makeMove = async function(index) {
+            if (!currentGameId || !userSymbol || !userId) {
+                showMessage('未加入遊戲，請先創建或加入遊戲。', true);
+                return;
+            }
+
+            const gameRef = doc(db, 'artifacts', appId, 'public', 'data', 'tictactoe', currentGameId);
+
+            try {
+                await runTransaction(db, async (transaction) => {
+                    const gameDoc = await transaction.get(gameRef);
+                    const gameData = gameDoc.data();
+
+                    if (gameData.status !== '進行中') {
+                        throw new Error("遊戲已結束或尚未開始。");
+                    }
+
+                    if (gameData.currentPlayer !== userSymbol) {
+                        throw new Error("現在不是你的回合。");
+                    }
+
+                    if (gameData.board[index] !== null) {
+                        throw new Error("此方格已被佔用。");
+                    }
+                    
+                    // 1. 更新棋盤
+                    const newBoard = [...gameData.board];
+                    newBoard[index] = userSymbol;
+                    gameData.board = newBoard;
+
+                    // 2. 檢查獲勝/平局
+                    const winner = checkWin(newBoard);
+                    
+                    if (winner) {
+                        gameData.status = `${winner} 獲勝`;
+                    } else if (checkDraw(newBoard)) {
+                        gameData.status = '平局';
+                    } else {
+                        // 3. 切換玩家
+                        gameData.currentPlayer = userSymbol === 'X' ? 'O' : 'X';
+                    }
+
+                    transaction.update(gameRef, gameData);
+                });
+
+            } catch (error) {
+                console.error("Error making move:", error);
+                // 只有在不是 "現在不是你的回合" 的情況下才顯示為錯誤
+                if (error.message !== "現在不是你的回合。") {
+                    showMessage(`移動失敗: ${error.message}`, true);
+                } else {
+                    // 如果只是單純不是回合，不顯示錯誤，避免干擾
+                }
+            }
+        }
+
+        // 5. 啟動應用程式
+        window.onload = initFirebase;
     </script>
 </body>
 </html>
