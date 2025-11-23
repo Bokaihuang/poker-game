@@ -1,509 +1,1074 @@
 <!DOCTYPE html>
+
 <html lang="zh-TW">
+
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>井字連線遊戲</title>
-    <!-- 引入 Tailwind CSS CDN -->
-    <script src="https://cdn.tailwindcss.com"></script>
-    <style>
-        /* 使用 Inter 字體 */
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
-        body {
-            font-family: 'Inter', sans-serif;
-            background-color: #f7f9fb;
-        }
-        .board-cell {
-            width: 100%;
-            height: 100%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 3rem;
-            font-weight: bold;
-            cursor: pointer;
-            transition: background-color 0.2s;
-            background-color: #fff;
-            border-radius: 0.5rem;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
-        }
-        .board-cell:hover:not(.occupied) {
-            background-color: #f0f4f8;
-        }
-        .occupied {
-            cursor: default;
-        }
-        .symbol-x {
-            color: #ef4444; /* Red 500 */
-        }
-        .symbol-o {
-            color: #3b82f6; /* Blue 500 */
-        }
-    </style>
+
+  <meta charset="UTF-8">
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <title>Pool Poker</title>
+
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <script src="https://unpkg.com/react@18/umd/react.development.js" crossorigin></script>
+
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js" crossorigin></script>
+
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/lucide/0.263.1/lucide.min.js"></script>
+
+  <style>
+
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
+
+    body { font-family: 'Inter', sans-serif; background-color: #1a202c; color: white; }
+
+    
+
+    /* Pool Ball Styles */
+
+    .ball {
+
+      box-shadow: inset -2px -2px 6px rgba(0,0,0,0.3), 2px 2px 5px rgba(0,0,0,0.3);
+
+    }
+
+    .stripe-ball {
+
+      background: white;
+
+      position: relative;
+
+      overflow: hidden;
+
+    }
+
+    .stripe-ball::before {
+
+      content: '';
+
+      position: absolute;
+
+      top: 20%;
+
+      bottom: 20%;
+
+      left: 0;
+
+      right: 0;
+
+      background: var(--stripe-color);
+
+    }
+
+    .stripe-text {
+
+      position: relative;
+
+      z-index: 10;
+
+      background: white;
+
+      border-radius: 50%;
+
+      width: 18px;
+
+      height: 18px;
+
+      display: flex;
+
+      align-items: center;
+
+      justify-content: center;
+
+      font-size: 10px;
+
+      font-weight: bold;
+
+      color: black;
+
+    }
+
+  </style>
+
 </head>
-<body class="p-4 md:p-8 min-h-screen flex items-start justify-center">
 
-    <div id="app" class="w-full max-w-lg bg-white p-6 md:p-8 rounded-xl shadow-2xl space-y-6">
-        <h1 class="text-3xl font-extrabold text-gray-800 text-center border-b pb-3 mb-4">
-            即時多人井字遊戲
-        </h1>
+<body>
 
-        <!-- 身份驗證區塊 -->
-        <div id="auth-status" class="bg-indigo-100 border-l-4 border-indigo-500 text-indigo-700 p-4 rounded-lg" role="alert">
-            <p id="connection-message" class="font-bold">正在驗證連線...</p>
-            <p id="user-id-display" class="text-sm break-all mt-1"></p>
-        </div>
+  <div id="root"></div>
 
-        <!-- 遊戲操作區塊 -->
-        <div id="game-controls" class="space-y-4">
-            <button id="create-game-btn" onclick="createGame()" class="w-full bg-green-600 hover:bg-green-700 text-white font-semibold py-3 rounded-lg shadow-md transition duration-150 ease-in-out disabled:opacity-50" disabled>
-                創建新遊戲 (你的符號是 X)
-            </button>
-            <div class="flex items-center space-x-2">
-                <input type="text" id="game-id-input" placeholder="輸入遊戲 ID" class="flex-grow p-3 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500" />
-                <button id="join-game-btn" onclick="joinGame()" class="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-6 rounded-lg shadow-md transition duration-150 ease-in-out disabled:opacity-50" disabled>
-                    加入遊戲
+
+
+  <!-- Firebase 初始化：已修正，支援 Canvas 環境和外部託管環境 (如 GitHub Pages) -->
+
+  <script type="module">
+
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+
+    import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+
+    import { getFirestore, doc, onSnapshot, setDoc, updateDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+    import { setLogLevel } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+
+
+    // --- 【重要】外部環境配置佔位符 ---
+
+    // *** 如果您在 Canvas 之外運行 (例如 GitHub Pages)，請將以下值替換為您的 Firebase 專案配置！ ***
+
+    const EXTERNAL_FIREBASE_CONFIG = {
+
+      apiKey: "AIzaSyCk54DEp6rzvpfQBBNW_iJByZ3boyHEPF0", // <-- 請務必替換成您的 apiKey
+
+      authDomain: "poolpokergame-b88ed.firebaseapp.com",
+
+      projectId: "poolpokergame-b88ed", // <-- 請務必替換成您的 projectId
+
+      storageBucket: "poolpokergame-b88ed.firebasestorage.app",
+
+      messagingSenderId: "574863840102",
+
+      appId: "1:574863840102:web:14368aaf84b3640c6eeea7"
+
+    };
+
+
+
+    // 偵測環境：檢查 Canvas 專屬全域變數是否存在
+
+    const isCanvasEnvironment = typeof __firebase_config !== 'undefined';
+
+    
+
+    // 設置配置變數
+
+    let firebaseConfig;
+
+    let initialAuthToken;
+
+    let appId;
+
+
+
+    if (isCanvasEnvironment) {
+
+        // 1. Canvas 環境：使用注入的全域變數
+
+        firebaseConfig = JSON.parse(__firebase_config);
+
+        initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
+
+        appId = typeof __app_id !== 'undefined' ? __app_id : firebaseConfig.projectId;
+
+    } else {
+
+        // 2. 外部環境 (如 GitHub Pages)：使用手動配置
+
+        firebaseConfig = EXTERNAL_FIREBASE_CONFIG;
+
+        initialAuthToken = null;
+
+        appId = firebaseConfig.projectId; 
+
+        
+
+        // 外部環境運行時，如果仍是預設值，顯示警告
+
+        if (firebaseConfig.apiKey === "YOUR_API_KEY") {
+
+             console.error("Firebase Initialization Error: Please update EXTERNAL_FIREBASE_CONFIG with your actual project keys for external hosting.");
+
+             // 應用程式將使用匿名登入，但不會連線到資料庫
+
+        }
+
+    }
+
+    
+
+    // 根據 Firestore 安全規則設定公共資料路徑
+
+    // 路徑結構：/artifacts/{appId}/public/data/pool_poker_rooms/main_room
+
+    window.GAME_ROOM_PATH = `artifacts/${appId}/public/data/pool_poker_rooms/main_room`; 
+
+
+
+    // --- Firebase Initialization ---
+
+    const app = initializeApp(firebaseConfig);
+
+    
+
+    // 設置全域變數供 React 元件使用
+
+    window.auth = getAuth(app); 
+
+    window.db = getFirestore(app);
+
+    window.doc = doc;
+
+    window.onSnapshot = onSnapshot;
+
+    window.setDoc = setDoc;
+
+    window.updateDoc = updateDoc;
+
+    window.onAuthStateChanged = onAuthStateChanged; 
+
+    
+
+    setLogLevel('debug'); // 啟用 debug log
+
+    
+
+    // 執行認證：優先使用自定義 Token，若無則使用匿名登入
+
+    const authPromise = (async () => {
+
+        try {
+
+            if (initialAuthToken) {
+
+                // Canvas 環境使用 Custom Token
+
+                await signInWithCustomToken(window.auth, initialAuthToken);
+
+            } else {
+
+                // 外部環境或無 Token 時使用匿名登入
+
+                await signInAnonymously(window.auth); 
+
+            }
+
+            console.log("Firebase Auth success.");
+
+        } catch (error) {
+
+            console.error("Firebase Auth Failed:", error);
+
+            // 錯誤將在 React 元件中處理並顯示給使用者
+
+        }
+
+    })();
+
+  </script>
+
+
+
+  <!-- React 應用程式 - type="text/babel" -->
+
+  <script type="text/babel">
+
+    // 從 window 解構 Firebase 函數和變數
+
+    const { 
+
+        auth, db, doc, onSnapshot, setDoc, updateDoc, 
+
+        onAuthStateChanged, GAME_ROOM_PATH 
+
+    } = window;
+
+    
+
+    const App = () => {
+
+      const [user, setUser] = React.useState(null);
+
+      const [gameState, setGameState] = React.useState(null);
+
+      const [nickname, setNickname] = React.useState('');
+
+      const [loading, setLoading] = React.useState(true);
+
+      const [errorMsg, setErrorMsg] = React.useState('');
+
+
+
+      // --- Authentication & Data Sync ---
+
+      React.useEffect(() => {
+
+        const unsubscribeAuth = onAuthStateChanged(auth, (currentUser) => {
+
+          setUser(currentUser);
+
+          // 在首次認證狀態確定後，解除 loading 狀態
+
+          setLoading(false);
+
+        }, (error) => {
+
+            console.error("Auth Error:", error);
+
+            setErrorMsg("身份驗證失敗，請檢查瀏覽器設定或 Firebase 設定。");
+
+            setLoading(false);
+
+        });
+
+        return () => unsubscribeAuth();
+
+      }, []);
+
+
+
+      // --- Firestore Listener ---
+
+      React.useEffect(() => {
+
+        // 確保 user 已經被設置且 loading 結束
+
+        if (!user || loading) return; 
+
+
+
+        // GAME_ROOM_PATH 現在指向一個文件 (e.g., .../pool_poker_rooms/main_room)
+
+        const gameDocRef = doc(db, GAME_ROOM_PATH);
+
+
+
+        const unsubscribe = onSnapshot(gameDocRef, (docSnap) => {
+
+          if (docSnap.exists()) {
+
+            setGameState(docSnap.data());
+
+          } else {
+
+            setGameState(null); // Room doesn't exist yet
+
+          }
+
+          if(errorMsg.includes("連線錯誤")) setErrorMsg(""); 
+
+        }, (error) => {
+
+          console.error("Snapshot error:", error);
+
+          setErrorMsg("連線錯誤：請確認您的 Firebase 設定已正確填入，且 Firestore 規則已發布以允許匿名使用者讀寫此路徑。");
+
+          setLoading(false); 
+
+        });
+
+
+
+        return () => unsubscribe();
+
+      }, [user, loading]);
+
+
+
+      // --- Game Actions (Logic is unchanged) ---
+
+
+
+      const handleJoin = async () => {
+
+        if (!nickname.trim()) {
+
+          setErrorMsg("請輸入暱稱");
+
+          return;
+
+        }
+
+
+
+        const gameDocRef = doc(db, GAME_ROOM_PATH);
+
+        const myId = user.uid;
+
+        
+
+        try {
+
+          if (!gameState) {
+
+            // Create new game
+
+            await setDoc(gameDocRef, {
+
+              creatorId: myId,
+
+              totalPlayers: 2,
+
+              gameStarted: false,
+
+              cardsPerPlayer: 5,
+
+              players: {
+
+                [myId]: {
+
+                  id: myId,
+
+                  nickname: nickname.trim(),
+
+                  cards: [],
+
+                  marked: []
+
+                }
+
+              },
+
+              lastUpdated: new Date().toISOString()
+
+            });
+
+          } else {
+
+            // Join existing
+
+            if (Object.keys(gameState.players || {}).length >= 5) {
+
+              setErrorMsg("房間已滿 (上限 5 人)！");
+
+              return;
+
+            }
+
+            
+
+            const updatedPlayers = {
+
+              ...gameState.players,
+
+              [myId]: {
+
+                id: myId,
+
+                nickname: nickname.trim(),
+
+                cards: [],
+
+                marked: []
+
+              }
+
+            };
+
+
+
+            await updateDoc(gameDocRef, { players: updatedPlayers });
+
+          }
+
+          setErrorMsg("");
+
+        } catch (e) {
+
+          console.error("Join failed:", e);
+
+          setErrorMsg("加入遊戲失敗，可能是權限不足。請檢查 Firebase Console 上的錯誤資訊。");
+
+        }
+
+      };
+
+
+
+      const handleStartGame = async () => {
+
+        if (gameState.creatorId !== user.uid) {
+
+             setErrorMsg("只有房主可以發牌！");
+
+             return;
+
+        }
+
+        
+
+        const playerIds = Object.keys(gameState.players);
+
+        if (playerIds.length === 0) return;
+
+
+
+        let deck = [];
+
+        for (let i = 1; i <= 13; i++) {
+
+          deck.push(i, i, i, i);
+
+        }
+
+        deck = deck.sort(() => Math.random() - 0.5);
+
+
+
+        const newPlayers = { ...gameState.players };
+
+        const cardsPerPlayer = gameState.cardsPerPlayer || 5;
+
+
+
+        playerIds.forEach((pid, index) => {
+
+          newPlayers[pid] = {
+
+            ...newPlayers[pid],
+
+            cards: deck.slice(index * cardsPerPlayer, (index + 1) * cardsPerPlayer), 
+
+            marked: []
+
+          };
+
+        });
+
+
+
+        const gameDocRef = doc(db, GAME_ROOM_PATH);
+
+        await updateDoc(gameDocRef, {
+
+          players: newPlayers,
+
+          gameStarted: true,
+
+          notice: '遊戲開始！'
+
+        });
+
+      };
+
+
+
+      const handleRestart = async () => {
+
+        if (gameState.creatorId !== user.uid) {
+
+             setErrorMsg("只有房主可以重開！");
+
+             return;
+
+        }
+
+
+
+        const emptyPlayers = {};
+
+        Object.keys(gameState.players).forEach(pid => {
+
+          emptyPlayers[pid] = {
+
+            ...gameState.players[pid],
+
+            cards: [],
+
+            marked: []
+
+          };
+
+        });
+
+
+
+        const gameDocRef = doc(db, GAME_ROOM_PATH);
+
+        await updateDoc(gameDocRef, {
+
+          players: emptyPlayers,
+
+          gameStarted: false,
+
+          notice: '已重新開局'
+
+        });
+
+      };
+
+
+
+      const handleMarkNumber = async (num) => {
+
+        if (!gameState?.gameStarted) {
+
+            setErrorMsg("遊戲尚未開始。");
+
+            return;
+
+        }
+
+        
+
+        const myId = user.uid;
+
+        const myData = gameState.players[myId];
+
+        if (!myData) return; 
+
+        
+
+        if (myData.marked.includes(num)) return; 
+
+
+
+        const newMarked = [...myData.marked, num];
+
+        const gameDocRef = doc(db, GAME_ROOM_PATH);
+
+        
+
+        await updateDoc(gameDocRef, {
+
+          [`players.${myId}.marked`]: newMarked,
+
+          notice: `${myData.nickname} 標記了 ${num} 號球`
+
+        });
+
+      };
+
+
+
+      // --- Helper: Ball Colors (Unchanged) ---
+
+      const getBallStyle = (num) => {
+
+        const colors = {
+
+          1: 'yellow', 2: 'blue', 3: 'red', 4: 'purple', 5: 'orange', 6: 'green', 7: 'brown', 8: 'black',
+
+          9: 'yellow', 10: 'blue', 11: 'red', 12: 'purple', 13: 'orange'
+
+        };
+
+        const color = colors[num] || 'gray';
+
+        const isStripe = num > 8;
+
+        
+
+        return { color, isStripe };
+
+      };
+
+
+
+      // --- Render Components (Unchanged) ---
+
+
+
+      if (loading || !user) {
+
+         return (
+
+            <div className="h-screen flex flex-col items-center justify-center p-4">
+
+               {errorMsg && (
+
+                   <div className="bg-red-500/20 text-red-300 p-4 rounded mb-4 text-center max-w-sm">
+
+                       連線發生致命錯誤：{errorMsg}
+
+                       <div className="text-xs mt-2 text-red-400">請確認您已在原始碼中填入 **您自己的 Firebase 專案配置**，並允許匿名登入。</div>
+
+                   </div>
+
+               )}
+
+               <div className="text-emerald-400 text-lg">正在連接 Firebase...</div>
+
+            </div>
+
+         );
+
+      }
+
+
+
+      const isJoined = gameState && gameState.players && gameState.players[user.uid];
+
+
+
+      if (!isJoined) {
+
+        return (
+
+          <div className="min-h-screen bg-slate-900 flex items-center justify-center p-4">
+
+            <div className="bg-slate-800 p-8 rounded-2xl shadow-2xl max-w-md w-full border border-slate-700">
+
+              <h1 className="text-3xl font-bold text-emerald-400 mb-6 text-center flex items-center justify-center gap-2">
+
+                🎱 Pool Poker 撞球撲克
+
+              </h1>
+
+              {errorMsg && <div className="bg-red-500/20 text-red-300 p-3 rounded mb-4 text-sm text-center">{errorMsg}</div>}
+
+              
+
+              <div className="space-y-4">
+
+                <div>
+
+                  <label className="block text-slate-400 text-sm mb-1">暱稱</label>
+
+                  <input 
+
+                    type="text" 
+
+                    value={nickname}
+
+                    onChange={(e) => setNickname(e.target.value)}
+
+                    className="w-full bg-slate-900 border border-slate-700 rounded p-3 text-white focus:outline-none focus:border-emerald-500 transition"
+
+                    placeholder="輸入您的暱稱"
+
+                  />
+
+                </div>
+
+                <button 
+
+                  onClick={handleJoin}
+
+                  className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-3 rounded transition shadow-lg shadow-emerald-900/50"
+
+                >
+
+                  {gameState ? "加入現有遊戲" : "建立新房間"}
+
                 </button>
+
+              </div>
+
+              
+
+              <div className="mt-6 text-xs text-slate-500 text-center">
+
+                {gameState ? 
+
+                  `${Object.keys(gameState.players || {}).length} 位玩家已在等候` : 
+
+                  "成為第一個開桌的人！"
+
+                }
+
+              </div>
+
             </div>
-            <p id="current-game-id" class="text-center text-sm font-medium text-gray-600 hidden">
-                當前遊戲 ID: <span class="font-mono text-indigo-700 text-base" id="display-game-id"></span>
-            </p>
-        </div>
 
-        <!-- 遊戲狀態區塊 -->
-        <div id="game-info" class="text-center p-3 bg-yellow-100 text-yellow-800 rounded-lg shadow-inner hidden">
-            <p id="player-role" class="font-bold text-lg mb-1"></p>
-            <p id="game-status" class="text-xl font-extrabold"></p>
-        </div>
+          </div>
 
-        <!-- 遊戲棋盤區塊 -->
-        <div id="game-board-container" class="mt-6 hidden">
-            <div id="game-board" class="grid grid-cols-3 grid-rows-3 gap-2 aspect-square p-2 bg-gray-200 rounded-xl shadow-inner">
-                <!-- Cell content will be generated here -->
-            </div>
-        </div>
+        );
 
-        <!-- 錯誤或提示訊息 -->
-        <div id="message-box" class="mt-4 p-3 text-sm text-red-700 bg-red-100 border border-red-200 rounded-lg hidden"></div>
-    </div>
-
-    <!-- Firebase SDK 引入 -->
-    <script type="module">
-        // 1. Firebase 服務和工具導入
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { getFirestore, doc, setDoc, onSnapshot, updateDoc, collection, query, where, getDocs, runTransaction } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
-        import { setLogLevel } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
-
-        // 設置日誌級別為 Debug 以便調試
-        setLogLevel('Debug');
-
-        // 2. 全域變量與 Firebase 初始化
-        let app;
-        let db;
-        let auth;
-        let userId = null;
-        let userSymbol = null; // 'X' or 'O'
-        let currentGameId = null;
-        let unsubscribe = null; // 用於儲存 onSnapshot 的取消訂閱函數
-
-        // 從環境變量獲取配置
-        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
-        const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : null;
-        const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
-        
-        // 應用程式 DOM 元素
-        const connMessageEl = document.getElementById('connection-message');
-        const userIdDisplayEl = document.getElementById('user-id-display');
-        const createBtn = document.getElementById('create-game-btn');
-        const joinBtn = document.getElementById('join-game-btn');
-        const gameIdInput = document.getElementById('game-id-input');
-        const boardEl = document.getElementById('game-board');
-        const gameInfoEl = document.getElementById('game-info');
-        const playerRoleEl = document.getElementById('player-role');
-        const gameStatusEl = document.getElementById('game-status');
-        const boardContainerEl = document.getElementById('game-board-container');
-        const messageBoxEl = document.getElementById('message-box');
-        const currentGameIdEl = document.getElementById('current-game-id');
-        const displayGameIdEl = document.getElementById('display-game-id');
+      }
 
 
-        // 顯示錯誤訊息
-        function showMessage(msg, isError = true) {
-            messageBoxEl.textContent = msg;
-            messageBoxEl.classList.remove('hidden', 'text-green-700', 'bg-green-100', 'text-red-700', 'bg-red-100', 'border-red-200', 'border-green-200');
-            messageBoxEl.classList.add(isError ? 'text-red-700' : 'text-green-700', isError ? 'bg-red-100' : 'bg-green-100', isError ? 'border-red-200' : 'border-green-200');
-            messageBoxEl.classList.remove('hidden');
-        }
 
-        // 隱藏訊息
-        function hideMessage() {
-            messageBoxEl.classList.add('hidden');
-        }
+      // GAME BOARD
 
-        // 渲染遊戲棋盤
-        function renderBoard(gameData) {
-            boardEl.innerHTML = ''; // 清空棋盤
+      const isCreator = gameState.creatorId === user.uid;
+
+
+
+      return (
+
+        <div className="min-h-screen bg-emerald-900 flex flex-col">
+
+          {/* Header */}
+
+          <div className="bg-emerald-950/80 p-4 shadow-md backdrop-blur-sm border-b border-emerald-800 flex flex-col sm:flex-row justify-between items-center sticky top-0 z-50">
+
+             <div className="flex items-center gap-2 mb-2 sm:mb-0">
+
+                <span className="text-2xl">🎱</span>
+
+                <h1 className="font-bold text-white">Pool Poker</h1>
+
+             </div>
+
+             
+
+             <div className="flex gap-2 text-sm">
+
+               {isCreator && !gameState.gameStarted && (
+
+                 <button onClick={handleStartGame} className="bg-yellow-600 hover:bg-yellow-500 text-white px-4 py-2 rounded font-bold shadow-lg">
+
+                   發牌開始遊戲
+
+                 </button>
+
+               )}
+
+               {isCreator && (
+
+                 <button onClick={handleRestart} className="bg-slate-700 hover:bg-slate-600 text-white px-4 py-2 rounded shadow-lg">
+
+                   重開一局
+
+                 </button>
+
+               )}
+
+             </div>
+
+          </div>
+
+
+
+          {/* Main Content */}
+
+          <div className="flex-1 p-4 max-w-6xl mx-auto w-full flex flex-col gap-6">
+
             
-            // 檢查是否所有必要的元素都已加載
-            if (!gameData || !gameData.board) {
-                boardEl.innerHTML = '<div class="col-span-3 text-center text-gray-500">等待遊戲數據...</div>';
-                return;
-            }
 
-            gameData.board.forEach((cell, index) => {
-                const cellEl = document.createElement('div');
-                cellEl.className = `board-cell ${cell ? 'occupied' : ''}`;
-                cellEl.dataset.index = index;
-                cellEl.innerHTML = cell ? `<span class="symbol-${cell.toLowerCase()}">${cell}</span>` : '';
+            {/* Notification Area */}
 
-                const isMyTurn = gameData.currentPlayer === userSymbol;
-                const canMove = !cell && isMyTurn && gameData.status === '進行中';
+            {(errorMsg || gameState.notice) && (
 
-                if (canMove) {
-                    cellEl.onclick = () => window.makeMove(index);
-                } else if (!cell && gameData.status === '進行中' && !isMyTurn) {
-                    // 提示非當前玩家的回合
-                    cellEl.style.cursor = 'wait';
-                }
+              <div className={`p-3 rounded shadow-lg text-center text-sm ${errorMsg ? 'bg-red-500/90 text-white animate-pulse' : 'bg-blue-500/20 text-blue-300'}`}>
 
-                boardEl.appendChild(cellEl);
-            });
-        }
+                {errorMsg || gameState.notice}
 
-        // 監聽遊戲狀態更新並更新 UI
-        function handleGameUpdate(gameData) {
-            if (!gameData) return;
+              </div>
 
-            // 1. 渲染棋盤
-            renderBoard(gameData);
+            )}
 
-            // 2. 更新遊戲資訊區塊
-            gameInfoEl.classList.remove('hidden');
+            {!gameState.gameStarted && (
 
-            // 設置玩家角色
-            playerRoleEl.textContent = `你是 ${userSymbol}`;
-            playerRoleEl.classList.remove('text-red-500', 'text-blue-500');
-            playerRoleEl.classList.add(userSymbol === 'X' ? 'text-red-500' : 'text-blue-500');
+               <div className="bg-emerald-800/50 p-4 rounded-lg border border-emerald-700 text-center text-emerald-200">
+
+                 等待房主發牌... (目前 {Object.keys(gameState.players).length} 位玩家)
+
+               </div>
+
+            )}
 
 
-            // 設置遊戲狀態
-            let statusText = '';
-            let statusClasses = 'font-extrabold';
 
-            if (gameData.status === '進行中') {
-                const isMyTurn = gameData.currentPlayer === userSymbol;
-                statusText = isMyTurn ? '輪到你 (點擊方格)' : `輪到 ${gameData.currentPlayer} (等待中)`;
-                statusClasses += isMyTurn ? ' text-green-600' : ' text-gray-600';
-            } else if (gameData.status === '平局') {
-                statusText = '遊戲結束：平局！';
-                statusClasses += ' text-purple-600';
-            } else if (gameData.status === 'X 獲勝' || gameData.status === 'O 獲勝') {
-                statusText = `遊戲結束: ${gameData.status}!`;
-                statusClasses += ' text-red-600';
-            } else if (gameData.status === '等待玩家') {
-                 // 檢查玩家是否只有一人
-                const players = gameData.players || {};
-                const playerCount = Object.keys(players).length;
+            {/* Ball Selection Area */}
 
-                if (playerCount === 1) {
-                    statusText = '等待另一位玩家加入...';
-                    statusClasses += ' text-orange-600';
-                } else {
-                    statusText = '遊戲已準備好開始！';
-                    statusClasses += ' text-green-600';
-                }
-            }
+            {gameState.gameStarted && (
 
-            gameStatusEl.textContent = statusText;
-            gameStatusEl.className = statusClasses;
-        }
+              <div className="bg-emerald-950/40 p-6 rounded-3xl border-[12px] border-amber-900 shadow-2xl relative">
 
-        // 3. Firebase 初始化和身份驗證
-        async function initFirebase() {
-            if (!firebaseConfig) {
-                connMessageEl.textContent = '錯誤: Firebase 配置未定義。';
-                connMessageEl.classList.replace('bg-indigo-100', 'bg-red-100');
-                connMessageEl.classList.replace('border-indigo-500', 'border-red-500');
-                connMessageEl.classList.replace('text-indigo-700', 'text-red-700');
-                return;
-            }
+                {/* Pockets visual (裝飾用) */}
 
-            try {
-                // 初始化 Firebase
-                app = initializeApp(firebaseConfig);
-                db = getFirestore(app);
-                auth = getAuth(app);
-                window.db = db; // 設置全域可訪問，供 makeMove 使用
+                <div className="absolute top-0 left-0 w-8 h-8 bg-black rounded-br-full"></div>
 
-                // 處理身份驗證
-                if (initialAuthToken) {
-                    await signInWithCustomToken(auth, initialAuthToken);
-                } else {
-                    // 如果沒有提供 token，則匿名登入
-                    await signInAnonymously(auth);
-                }
+                <div className="absolute top-0 right-0 w-8 h-8 bg-black rounded-bl-full"></div>
 
-                // 設置身份驗證狀態監聽器
-                onAuthStateChanged(auth, (user) => {
-                    if (user) {
-                        userId = user.uid;
-                        connMessageEl.textContent = '✅ 已連線 (身份驗證完成)';
-                        connMessageEl.classList.replace('bg-indigo-100', 'bg-green-100');
-                        connMessageEl.classList.replace('border-indigo-500', 'border-green-500');
-                        connMessageEl.classList.replace('text-indigo-700', 'text-green-700');
-                        userIdDisplayEl.textContent = `你的 User ID (分享給其他人): ${userId}`;
+                <div className="absolute bottom-0 left-0 w-8 h-8 bg-black rounded-tr-full"></div>
+
+                <div className="absolute bottom-0 right-0 w-8 h-8 bg-black rounded-tl-full"></div>
+
+                
+
+                <h2 className="text-center text-emerald-200/50 text-sm mb-4 font-mono uppercase tracking-widest">點擊以標記擊落的球 (1-13)</h2>
+
+                
+
+                <div className="flex flex-wrap justify-center gap-3 sm:gap-4">
+
+                  {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13].map((num) => {
+
+                    const { color, isStripe } = getBallStyle(num);
+
+                    const isMarked = gameState.players[user.uid]?.marked.includes(num);
+
+                    
+
+                    return (
+
+                      <button
+
+                        key={num}
+
+                        onClick={() => handleMarkNumber(num)}
+
+                        disabled={isMarked}
+
+                        title={isMarked ? `已標記 ${num} 號球` : `點擊標記 ${num} 號球`}
+
+                        className={`
+
+                          w-12 h-12 sm:w-14 sm:h-14 rounded-full flex items-center justify-center font-bold text-sm shadow-xl transition-transform active:scale-95
+
+                          ${isMarked ? 'opacity-30 grayscale cursor-not-allowed scale-90' : 'hover:scale-110'}
+
+                          ${isStripe ? 'stripe-ball' : 'ball'}
+
+                        `}
+
+                        style={{
+
+                          backgroundColor: isStripe ? 'white' : color,
+
+                          '--stripe-color': color,
+
+                          color: isStripe ? 'black' : (num === 8 ? 'white' : 'white')
+
+                        }}
+
+                      >
+
+                         <span className={isStripe ? 'stripe-text' : ''}>{num}</span>
+
+                      </button>
+
+                    );
+
+                  })}
+
+                </div>
+
+              </div>
+
+            )}
+
+
+
+            {/* Players Hands */}
+
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+
+              {Object.values(gameState.players).sort((a,b) => a.id === user.uid ? -1 : 1).map((player) => {
+
+                const isMe = player.id === user.uid;
+
+                
+
+                return (
+
+                  <div key={player.id} className={`
+
+                    relative p-4 rounded-xl border-2 transition-all duration-300
+
+                    ${isMe ? 'bg-emerald-800 border-emerald-400 shadow-lg scale-[1.02]' : 'bg-emerald-900/60 border-emerald-800'}
+
+                  `}>
+
+                    <div className="flex justify-between items-center mb-3">
+
+                      <div className="flex items-center gap-2">
+
+                        <div className={`w-3 h-3 rounded-full ${isMe ? 'bg-green-400' : 'bg-slate-500'}`}></div>
+
+                        <span className={`font-bold ${isMe ? 'text-white' : 'text-emerald-200'}`}>
+
+                          {player.nickname} {isMe && '(您)'}
+
+                        </span>
+
+                      </div>
+
+                      <span className="text-xs text-emerald-400 font-mono">
+
+                        已擊落 {player.marked?.length || 0} 個目標
+
+                      </span>
+
+                    </div>
+
+
+
+                    <div className="flex flex-wrap gap-2 min-h-[60px]">
+
+                      {gameState.gameStarted && player.cards && player.cards.map((card, idx) => {
+
+                        const isMarked = player.marked.includes(card);
+
+                        const isVisible = isMe || isMarked;
+
                         
-                        // 啟用遊戲控制
-                        createBtn.disabled = false;
-                        joinBtn.disabled = false;
 
-                        console.log('User authenticated with ID:', userId);
-                    } else {
-                        // 雖然我們強制匿名登入，但以防萬一
-                        connMessageEl.textContent = '❌ 連線錯誤: 請嘗試重新整理';
-                        connMessageEl.classList.replace('bg-indigo-100', 'bg-red-100');
-                        connMessageEl.classList.replace('border-indigo-500', 'border-red-500');
-                        connMessageEl.classList.replace('text-indigo-700', 'text-red-700');
-                        userId = null;
-                        createBtn.disabled = true;
-                        joinBtn.disabled = true;
-                    }
-                });
+                        return (
 
-            } catch (error) {
-                console.error("Firebase Initialization/Authentication Error:", error);
-                connMessageEl.textContent = `❌ 連線失敗: ${error.message}`;
-                connMessageEl.classList.replace('bg-indigo-100', 'bg-red-100');
-                connMessageEl.classList.replace('border-indigo-500', 'border-red-500');
-                connMessageEl.classList.replace('text-indigo-700', 'text-red-700');
-            }
-        }
-        
-        // 4. 遊戲功能
+                          <div 
 
-        // 檢查勝利條件
-        function checkWin(board) {
-            const lines = [
-                [0, 1, 2], [3, 4, 5], [6, 7, 8], // rows
-                [0, 3, 6], [1, 4, 7], [2, 5, 8], // columns
-                [0, 4, 8], [2, 4, 6], // diagonals
-            ];
+                            key={`${player.id}-${idx}`}
 
-            for (let i = 0; i < lines.length; i++) {
-                const [a, b, c] = lines[i];
-                if (board[a] && board[a] === board[b] && board[a] === board[c]) {
-                    return board[a]; // 返回獲勝者的符號 ('X' or 'O')
-                }
-            }
-            return null;
-        }
+                            className={`
 
-        // 檢查平局
-        function checkDraw(board) {
-            return !checkWin(board) && board.every(cell => cell !== null);
-        }
+                              w-10 h-14 sm:w-12 sm:h-16 rounded flex items-center justify-center text-lg font-bold shadow-sm transition-all duration-500
 
-        // 開始監聽 Firestore 上的特定遊戲
-        function startListeningToGame(gameId) {
-            if (unsubscribe) {
-                unsubscribe(); // 停止舊的監聽
-            }
-            
-            currentGameId = gameId;
-            const gameRef = doc(db, 'artifacts', appId, 'public', 'data', 'tictactoe', gameId);
-            
-            // 顯示遊戲 ID
-            displayGameIdEl.textContent = gameId;
-            currentGameIdEl.classList.remove('hidden');
-            boardContainerEl.classList.remove('hidden');
-            hideMessage();
+                              ${!isVisible 
 
-            unsubscribe = onSnapshot(gameRef, (docSnap) => {
-                if (docSnap.exists()) {
-                    const gameData = docSnap.data();
-                    handleGameUpdate(gameData);
-                } else {
-                    showMessage('遊戲不存在或已結束。', true);
-                    resetGameState();
-                }
-            }, (error) => {
-                console.error("Firestore onSnapshot error:", error);
-                showMessage(`資料庫錯誤: ${error.message}`, true);
-                resetGameState();
-            });
-        }
+                                ? 'bg-emerald-700 border border-emerald-600 opacity-80' 
 
-        // 重置本地遊戲狀態
-        function resetGameState() {
-            if (unsubscribe) {
-                unsubscribe();
-                unsubscribe = null;
-            }
-            currentGameId = null;
-            userSymbol = null;
-            currentGameIdEl.classList.add('hidden');
-            boardContainerEl.classList.add('hidden');
-            gameInfoEl.classList.add('hidden');
-            renderBoard({ board: Array(9).fill(null) });
-        }
-        
-        // 創建新遊戲 (X 玩家)
-        window.createGame = async function() {
-            if (!userId) {
-                showMessage('請等待身份驗證完成。', true);
-                return;
-            }
-            
-            try {
-                // 創建一個新的遊戲 ID (使用 UUID 或時間戳組合)
-                const newGameId = `game-${Date.now().toString(36).toUpperCase()}`; 
-                const gameRef = doc(db, 'artifacts', appId, 'public', 'data', 'tictactoe', newGameId);
-                
-                // 初始遊戲狀態
-                const initialData = {
-                    board: Array(9).fill(null), // 9個單元的棋盤
-                    currentPlayer: 'X',
-                    status: '等待玩家',
-                    players: {
-                        'X': userId,
-                    },
-                    createdAt: new Date().getTime(),
-                };
+                                : isMarked 
 
-                await setDoc(gameRef, initialData);
-                
-                // 設置為 X 玩家並開始監聽
-                userSymbol = 'X';
-                startListeningToGame(newGameId);
-                showMessage(`✅ 遊戲 [${newGameId}] 創建成功！分享此 ID 給朋友`, false);
+                                  ? 'bg-yellow-400 text-black border-2 border-yellow-200 scale-105 shadow-yellow-500/50' 
 
-            } catch (error) {
-                console.error("Error creating game:", error);
-                showMessage(`創建遊戲失敗: ${error.message}`, true);
-            }
-        }
+                                  : 'bg-white text-slate-800' 
 
-        // 加入現有遊戲 (O 玩家)
-        window.joinGame = async function() {
-            if (!userId) {
-                showMessage('請等待身份驗證完成。', true);
-                return;
-            }
+                              }
 
-            const gameId = gameIdInput.value.trim().toUpperCase();
-            if (!gameId) {
-                showMessage('請輸入有效的遊戲 ID。', true);
-                return;
-            }
-            
-            const gameRef = doc(db, 'artifacts', appId, 'public', 'data', 'tictactoe', gameId);
+                            `}
 
-            try {
-                // 使用交易確保原子性 (避免多個用戶同時加入)
-                await runTransaction(db, async (transaction) => {
-                    const gameDoc = await transaction.get(gameRef);
+                          >
 
-                    if (!gameDoc.exists()) {
-                        throw new Error("遊戲 ID 不存在。");
-                    }
+                             {isVisible ? card : ''}
 
-                    const gameData = gameDoc.data();
-                    const players = gameData.players || {};
+                          </div>
 
-                    if (players['X'] && players['O']) {
-                        throw new Error("遊戲已滿，無法加入。");
-                    }
-                    
-                    if (players['X'] === userId || players['O'] === userId) {
-                        // 已經在遊戲中，直接開始監聽
-                        userSymbol = players['X'] === userId ? 'X' : 'O';
-                        return;
-                    }
+                        );
 
-                    if (!players['X']) {
-                        // 理論上不應該發生，但以防萬一
-                        players['X'] = userId;
-                        userSymbol = 'X';
-                    } else {
-                        // 加入 O 玩家
-                        players['O'] = userId;
-                        userSymbol = 'O';
-                        gameData.status = '進行中'; // 兩個玩家到齊，遊戲開始
-                    }
+                      })}
 
-                    gameData.players = players;
-                    transaction.update(gameRef, gameData);
-                });
-                
-                startListeningToGame(gameId);
-                showMessage(`✅ 成功加入遊戲 [${gameId}]！你的符號是 ${userSymbol}`, false);
+                      
 
-            } catch (error) {
-                console.error("Error joining game:", error);
-                showMessage(`加入遊戲失敗: ${error.message}`, true);
-            }
-        }
+                      {gameState.gameStarted && (!player.cards || player.cards.length === 0) && (
 
-        // 進行移動
-        window.makeMove = async function(index) {
-            if (!currentGameId || !userSymbol || !userId) {
-                showMessage('未加入遊戲，請先創建或加入遊戲。', true);
-                return;
-            }
+                        <div className="text-sm text-emerald-500 italic w-full text-center py-2">尚未發牌</div>
 
-            const gameRef = doc(db, 'artifacts', appId, 'public', 'data', 'tictactoe', currentGameId);
+                      )}
 
-            try {
-                await runTransaction(db, async (transaction) => {
-                    const gameDoc = await transaction.get(gameRef);
-                    const gameData = gameDoc.data();
+                      
 
-                    if (gameData.status !== '進行中') {
-                        throw new Error("遊戲已結束或尚未開始。");
-                    }
+                      {!gameState.gameStarted && (
 
-                    if (gameData.currentPlayer !== userSymbol) {
-                        throw new Error("現在不是你的回合。");
-                    }
+                        <div className="text-sm text-emerald-500 italic w-full text-center py-2">等待中...</div>
 
-                    if (gameData.board[index] !== null) {
-                        throw new Error("此方格已被佔用。");
-                    }
-                    
-                    // 1. 更新棋盤
-                    const newBoard = [...gameData.board];
-                    newBoard[index] = userSymbol;
-                    gameData.board = newBoard;
+                      )}
 
-                    // 2. 檢查獲勝/平局
-                    const winner = checkWin(newBoard);
-                    
-                    if (winner) {
-                        gameData.status = `${winner} 獲勝`;
-                    } else if (checkDraw(newBoard)) {
-                        gameData.status = '平局';
-                    } else {
-                        // 3. 切換玩家
-                        gameData.currentPlayer = userSymbol === 'X' ? 'O' : 'X';
-                    }
+                    </div>
 
-                    transaction.update(gameRef, gameData);
-                });
+                  </div>
 
-            } catch (error) {
-                console.error("Error making move:", error);
-                // 只有在不是 "現在不是你的回合" 的情況下才顯示為錯誤
-                if (error.message !== "現在不是你的回合。") {
-                    showMessage(`移動失敗: ${error.message}`, true);
-                } else {
-                    // 如果只是單純不是回合，不顯示錯誤，避免干擾
-                }
-            }
-        }
+                );
 
-        // 5. 啟動應用程式
-        window.onload = initFirebase;
-    </script>
+              })}
+
+            </div>
+
+
+
+          </div>
+
+        </div>
+
+      );
+
+    };
+
+
+
+    const root = ReactDOM.createRoot(document.getElementById('root'));
+
+    root.render(<App />);
+
+  </script>
+
 </body>
+
 </html>
+
