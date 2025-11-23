@@ -54,11 +54,9 @@
     import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
     import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
     import { getFirestore, doc, onSnapshot, setDoc, updateDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
-    
-    // -------------------------------------------------------------
-    // IMPORTANT: This configuration is taken from your initial request 
-    // and is now hardcoded for GitHub Pages deployment.
-    // -------------------------------------------------------------
+    import { setLogLevel } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+    // IMPORTANT: Hardcoded configuration for GitHub Pages deployment.
     const firebaseConfig = {
       apiKey: "AIzaSyCk54DEp6rzvpfQBBNW_iJByZ3boyHEPF0",
       authDomain: "poolpokergame-b88ed.firebaseapp.com",
@@ -68,17 +66,17 @@
       appId: "1:574863840102:web:14368aaf84b3640c6eeea7"
     };
     
-    // Hardcoded unique ID for the public room (since __app_id is unavailable)
-    const PUBLIC_APP_ID = 'pool-poker-game-shared';
+    // Simplified Public Path for GitHub Pages
+    const GAME_ROOM_PATH = 'games/main_pool_game_demo_public'; 
 
     // --- Firebase Initialization ---
     const app = initializeApp(firebaseConfig);
     const auth = getAuth(app);
     const db = getFirestore(app);
+    // setLogLevel('debug'); // 啟用 debug log 方便檢查連線問題
 
-    // 啟用匿名登入（適用於公開網站）
-    // 請注意，您需要確保您的 Firestore Security Rules 允許匿名讀寫
-    signInAnonymously(auth).catch(error => console.error("Anonymous Sign-in Failed:", error));
+    signInAnonymously(auth)
+      .catch(error => console.error("Anonymous Sign-in Failed:", error));
     // -------------------------------------------------------------
 
     const App = () => {
@@ -91,9 +89,11 @@
       // --- Authentication & Data Sync ---
       React.useEffect(() => {
         const unsubscribeAuth = onAuthStateChanged(auth, (currentUser) => {
-          // 在 GitHub Pages 環境中，我們只執行一次匿名登入
           setUser(currentUser);
           setLoading(false);
+        }, (error) => {
+            console.error("Auth Error:", error);
+            setErrorMsg("身份驗證失敗，請檢查瀏覽器設定。");
         });
         return () => unsubscribeAuth();
       }, []);
@@ -102,8 +102,8 @@
       React.useEffect(() => {
         if (!user) return;
 
-        // 使用硬式編碼的路徑來存取公共資料
-        const gameDocRef = doc(db, 'artifacts', PUBLIC_APP_ID, 'public', 'data', 'pool_poker_room');
+        // 使用簡化後的公共路徑
+        const gameDocRef = doc(db, GAME_ROOM_PATH);
 
         const unsubscribe = onSnapshot(gameDocRef, (docSnap) => {
           if (docSnap.exists()) {
@@ -113,13 +113,13 @@
           }
         }, (error) => {
           console.error("Snapshot error:", error);
-          setErrorMsg("錯誤：無法同步遊戲資料，請檢查您的 Firestore Security Rules 是否允許匿名讀寫。");
+          setErrorMsg("連線錯誤：請確認您的 Firestore 規則已設定為允許讀寫此路徑。");
         });
 
         return () => unsubscribe();
       }, [user]);
 
-      // --- Game Actions ---
+      // --- Game Actions (Logic is unchanged) ---
 
       const handleJoin = async () => {
         if (!nickname.trim()) {
@@ -127,7 +127,7 @@
           return;
         }
 
-        const gameDocRef = doc(db, 'artifacts', PUBLIC_APP_ID, 'public', 'data', 'pool_poker_room');
+        const gameDocRef = doc(db, GAME_ROOM_PATH);
         const myId = user.uid;
         
         try {
@@ -170,7 +170,7 @@
           setErrorMsg("");
         } catch (e) {
           console.error("Join failed:", e);
-          setErrorMsg("加入遊戲失敗，可能需要檢查網路或權限。");
+          setErrorMsg("加入遊戲失敗，可能是權限不足。");
         }
       };
 
@@ -183,12 +183,10 @@
         const playerIds = Object.keys(gameState.players);
         if (playerIds.length === 0) return;
 
-        // Generate Deck (1-13, 4 copies of each)
         let deck = [];
         for (let i = 1; i <= 13; i++) {
           deck.push(i, i, i, i);
         }
-        // Shuffle
         deck = deck.sort(() => Math.random() - 0.5);
 
         const newPlayers = { ...gameState.players };
@@ -197,13 +195,12 @@
         playerIds.forEach((pid, index) => {
           newPlayers[pid] = {
             ...newPlayers[pid],
-            // 確保不會發超出牌組的牌
             cards: deck.slice(index * cardsPerPlayer, (index + 1) * cardsPerPlayer), 
             marked: []
           };
         });
 
-        const gameDocRef = doc(db, 'artifacts', PUBLIC_APP_ID, 'public', 'data', 'pool_poker_room');
+        const gameDocRef = doc(db, GAME_ROOM_PATH);
         await updateDoc(gameDocRef, {
           players: newPlayers,
           gameStarted: true,
@@ -226,7 +223,7 @@
           };
         });
 
-        const gameDocRef = doc(db, 'artifacts', PUBLIC_APP_ID, 'public', 'data', 'pool_poker_room');
+        const gameDocRef = doc(db, GAME_ROOM_PATH);
         await updateDoc(gameDocRef, {
           players: emptyPlayers,
           gameStarted: false,
@@ -247,7 +244,7 @@
         if (myData.marked.includes(num)) return; 
 
         const newMarked = [...myData.marked, num];
-        const gameDocRef = doc(db, 'artifacts', PUBLIC_APP_ID, 'public', 'data', 'pool_poker_room');
+        const gameDocRef = doc(db, GAME_ROOM_PATH);
         
         await updateDoc(gameDocRef, {
           [`players.${myId}.marked`]: newMarked,
@@ -255,7 +252,7 @@
         });
       };
 
-      // --- Helper: Ball Colors ---
+      // --- Helper: Ball Colors (Unchanged) ---
       const getBallStyle = (num) => {
         const colors = {
           1: 'yellow', 2: 'blue', 3: 'red', 4: 'purple', 5: 'orange', 6: 'green', 7: 'brown', 8: 'black',
@@ -267,13 +264,12 @@
         return { color, isStripe };
       };
 
-      // --- Render Components ---
+      // --- Render Components (Unchanged) ---
 
-      if (loading || !user) return <div className="h-screen flex items-center justify-center text-emerald-400">正在連接 Firebase...</div>;
+      if (loading || !user) return <div className="h-screen flex items-center justify-center text-emerald-400 text-lg">正在連接 Firebase...</div>;
 
       const isJoined = gameState && gameState.players && gameState.players[user.uid];
 
-      // LOGIN SCREEN
       if (!isJoined) {
         return (
           <div className="min-h-screen bg-slate-900 flex items-center justify-center p-4">
@@ -420,7 +416,6 @@
                     <div className="flex flex-wrap gap-2 min-h-[60px]">
                       {gameState.gameStarted && player.cards && player.cards.map((card, idx) => {
                         const isMarked = player.marked.includes(card);
-                        // 顯示條件：是自己的卡牌 OR 該號碼已被標記
                         const isVisible = isMe || isMarked;
                         
                         return (
@@ -429,10 +424,10 @@
                             className={`
                               w-10 h-14 sm:w-12 sm:h-16 rounded flex items-center justify-center text-lg font-bold shadow-sm transition-all duration-500
                               ${!isVisible 
-                                ? 'bg-emerald-700 border border-emerald-600 opacity-80' // 卡背
+                                ? 'bg-emerald-700 border border-emerald-600 opacity-80' 
                                 : isMarked 
-                                  ? 'bg-yellow-400 text-black border-2 border-yellow-200 scale-105 shadow-yellow-500/50' // 擊落的卡
-                                  : 'bg-white text-slate-800' // 自己的卡
+                                  ? 'bg-yellow-400 text-black border-2 border-yellow-200 scale-105 shadow-yellow-500/50' 
+                                  : 'bg-white text-slate-800' 
                               }
                             `}
                           >
