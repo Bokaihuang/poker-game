@@ -50,35 +50,65 @@
 <body>
   <div id="root"></div>
 
+  <!-- Firebase 初始化 - 使用全域變數 __firebase_config 和 __initial_auth_token -->
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-    import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+    import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
     import { getFirestore, doc, onSnapshot, setDoc, updateDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
     import { setLogLevel } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
-    // IMPORTANT: Hardcoded configuration for GitHub Pages deployment.
-    const firebaseConfig = {
-      apiKey: "AIzaSyCk54DEp6rzvpfQBBNW_iJByZ3boyHEPF0",
-      authDomain: "poolpokergame-b88ed.firebaseapp.com",
-      projectId: "poolpokergame-b88ed",
-      storageBucket: "poolpokergame-b88ed.appspot.com",
-      messagingSenderId: "574863840102",
-      appId: "1:574863840102:web:14368aaf84b3640c6eeea7"
-    };
+    // --- 獲取 Canvas 環境提供的全域配置 ---
+    const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+    const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : null;
+    const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
+
+    if (!firebaseConfig) {
+        console.error("Firebase configuration is missing. Cannot initialize Firebase.");
+    }
     
-    // Simplified Public Path for GitHub Pages
-    const GAME_ROOM_PATH = 'games/main_pool_game_demo_public'; 
+    // 根據 Firestore 安全規則設定公共資料路徑
+    // 路徑格式: /artifacts/{appId}/public/data/{your_collection_name}/{document_id}
+    // 必須指向一個文件 (Document)，因此路徑段數必須是偶數。
+    window.GAME_ROOM_PATH = `artifacts/${appId}/public/data/pool_poker_rooms/main_room`; 
 
     // --- Firebase Initialization ---
     const app = initializeApp(firebaseConfig);
-    const auth = getAuth(app);
-    const db = getFirestore(app);
-    // setLogLevel('debug'); // 啟用 debug log 方便檢查連線問題
+    
+    // 設置全域變數供 React 元件使用
+    window.auth = getAuth(app); 
+    window.db = getFirestore(app);
+    window.doc = doc;
+    window.onSnapshot = onSnapshot;
+    window.setDoc = setDoc;
+    window.updateDoc = updateDoc;
+    window.onAuthStateChanged = onAuthStateChanged; 
+    
+    setLogLevel('debug'); // 啟用 debug log
+    
+    // 執行認證：優先使用自定義 Token，若無則使用匿名登入
+    const authPromise = (async () => {
+        try {
+            if (initialAuthToken) {
+                await signInWithCustomToken(window.auth, initialAuthToken);
+            } else {
+                await signInAnonymously(window.auth);
+            }
+            console.log("Firebase Auth success.");
+        } catch (error) {
+            console.error("Firebase Auth Failed:", error);
+            // 錯誤將在 React 元件中處理並顯示給使用者
+        }
+    })();
+  </script>
 
-    signInAnonymously(auth)
-      .catch(error => console.error("Anonymous Sign-in Failed:", error));
-    // -------------------------------------------------------------
-
+  <!-- React 應用程式 - type="text/babel" -->
+  <script type="text/babel">
+    // 從 window 解構 Firebase 函數和變數
+    const { 
+        auth, db, doc, onSnapshot, setDoc, updateDoc, 
+        onAuthStateChanged, GAME_ROOM_PATH 
+    } = window;
+    
     const App = () => {
       const [user, setUser] = React.useState(null);
       const [gameState, setGameState] = React.useState(null);
@@ -90,19 +120,22 @@
       React.useEffect(() => {
         const unsubscribeAuth = onAuthStateChanged(auth, (currentUser) => {
           setUser(currentUser);
+          // 在首次認證狀態確定後，解除 loading 狀態
           setLoading(false);
         }, (error) => {
             console.error("Auth Error:", error);
-            setErrorMsg("身份驗證失敗，請檢查瀏覽器設定。");
+            setErrorMsg("身份驗證失敗，請檢查瀏覽器設定或 Firebase 設定。");
+            setLoading(false);
         });
         return () => unsubscribeAuth();
       }, []);
 
       // --- Firestore Listener ---
       React.useEffect(() => {
-        if (!user) return;
+        // 確保 user 已經被設置且 loading 結束
+        if (!user || loading) return; 
 
-        // 使用簡化後的公共路徑
+        // GAME_ROOM_PATH 現在指向一個文件 (e.g., .../pool_poker_rooms/main_room)
         const gameDocRef = doc(db, GAME_ROOM_PATH);
 
         const unsubscribe = onSnapshot(gameDocRef, (docSnap) => {
@@ -111,13 +144,15 @@
           } else {
             setGameState(null); // Room doesn't exist yet
           }
+          if(errorMsg.includes("連線錯誤")) setErrorMsg(""); 
         }, (error) => {
           console.error("Snapshot error:", error);
           setErrorMsg("連線錯誤：請確認您的 Firestore 規則已設定為允許讀寫此路徑。");
+          setLoading(false); 
         });
 
         return () => unsubscribe();
-      }, [user]);
+      }, [user, loading]);
 
       // --- Game Actions (Logic is unchanged) ---
 
@@ -266,7 +301,19 @@
 
       // --- Render Components (Unchanged) ---
 
-      if (loading || !user) return <div className="h-screen flex items-center justify-center text-emerald-400 text-lg">正在連接 Firebase...</div>;
+      if (loading || !user) {
+         return (
+            <div className="h-screen flex flex-col items-center justify-center p-4">
+               {errorMsg && (
+                   <div className="bg-red-500/20 text-red-300 p-4 rounded mb-4 text-center max-w-sm">
+                       連線發生致命錯誤：{errorMsg}
+                       <div className="text-xs mt-2 text-red-400">請確認 Firebase 設定和安全規則已發布。</div>
+                   </div>
+               )}
+               <div className="text-emerald-400 text-lg">正在連接 Firebase...</div>
+            </div>
+         );
+      }
 
       const isJoined = gameState && gameState.players && gameState.players[user.uid];
 
