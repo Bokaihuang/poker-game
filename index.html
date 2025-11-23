@@ -121,10 +121,53 @@
         import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
         import { getFirestore, collection, addDoc, onSnapshot, query, setLogLevel, serverTimestamp, doc, setDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
+        // =========================================================================
+        // !!! IMPORTANT: 外部部署配置區塊 !!!
+        // 如果您在 Canvas 以外的地方運行此檔案 (例如 GitHub Pages 或本地端)，
+        // 請將您的 Firebase 公共配置 (從 Firebase Console 取得) 貼到下方變數中，
+        // 否則應用程式將顯示「缺少 Firebase 設定檔！」的錯誤。
+        // =========================================================================
+        const YOUR_FIREBASE_CONFIG = {
+            apiKey: "YOUR_API_KEY", // <-- 請在此貼上您的 apiKey
+            authDomain: "YOUR_PROJECT_ID.firebaseapp.com", // <-- 請在此貼上您的 authDomain
+            projectId: "YOUR_PROJECT_ID", // <-- 請在此貼上您的 projectId
+            storageBucket: "YOUR_PROJECT_ID.appspot.com",
+            messagingSenderId: "YOUR_SENDER_ID",
+            appId: "YOUR_APP_ID"
+            // measurementId: "G-XXXXXXXXXX" // 如果需要
+        };
+        // =========================================================================
+
+
         // 全域變數檢查 (由 Canvas 環境提供)
         const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
-        const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : null;
         const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
+
+        let firebaseConfig = null;
+        // 檢查 Canvas 環境變數
+        if (typeof __firebase_config !== 'undefined' && __firebase_config) {
+            try {
+                // 如果 Canvas 變數存在，則使用它
+                firebaseConfig = JSON.parse(__firebase_config);
+            } catch (e) {
+                console.error("無法解析 __firebase_config, 使用手動配置。", e);
+            }
+        }
+        
+        // 如果 Canvas 配置不存在或解析失敗，則使用手動配置
+        if (!firebaseConfig || firebaseConfig.projectId === 'placeholder') {
+            // 檢查手動配置是否已填寫
+            if (YOUR_FIREBASE_CONFIG.apiKey.includes("YOUR_API_KEY")) {
+                // 致命錯誤：手動配置也未填寫
+                window.onload = () => showMessage('致命錯誤', '缺少 Firebase 設定檔！如果您在外部運行，請編輯程式碼並填入您的 Firebase 配置 (YOUR_FIREBASE_CONFIG)。');
+                // 修復 Illegal return statement 錯誤：移除頂層 return，並將 firebaseConfig 設為 null
+                firebaseConfig = null; 
+            } else {
+                // 手動配置有效
+                firebaseConfig = YOUR_FIREBASE_CONFIG;
+            }
+        }
+
 
         // 全域 Firebase 實例和使用者資訊
         let db;
@@ -132,7 +175,7 @@
         let userId = null;
         let isAuthReady = false;
 
-        // DOM 元素
+        // DOM 元素 (省略重複定義)
         const userIdDisplay = document.getElementById('user-id-display');
         const createGameBtn = document.getElementById('create-game-btn');
         const createBtnText = document.getElementById('create-btn-text');
@@ -158,11 +201,6 @@
         // ===============================================
 
         async function initFirebase() {
-            if (!firebaseConfig) {
-                showMessage('致命錯誤', '缺少 Firebase 設定檔！應用程式無法啟動。');
-                return;
-            }
-
             try {
                 // 初始化 Firebase 應用程式
                 const app = initializeApp(firebaseConfig);
@@ -178,8 +216,10 @@
                 authMessage.textContent = '正在進行身份驗證...';
 
                 if (initialAuthToken) {
+                    // 使用 Canvas 提供的自定義 Token 登入
                     await signInWithCustomToken(auth, initialAuthToken);
                 } else {
+                    // 如果沒有 Token，則匿名登入 (適用於外部部署)
                     await signInAnonymously(auth);
                 }
 
@@ -294,7 +334,9 @@
             }
             
             const isFull = playerCount >= (game.maxPlayers || 4);
-            const joinButtonDisabled = !isJoinable || isFull || (game.players && game.players.some(p => p.userId === userId));
+            // 檢查用戶是否已在遊戲中
+            const isInGame = game.players && game.players.some(p => p.userId === userId);
+            const joinButtonDisabled = !isJoinable || isFull || isInGame;
 
             // 創建遊戲資訊 HTML
             item.innerHTML = `
@@ -313,7 +355,7 @@
                 <button data-game-id="${gameId}" 
                         class="join-game-btn bg-yellow-500 text-gray-900 font-bold py-2 px-6 rounded-xl hover:bg-yellow-400 disabled:opacity-30 pool-button w-full md:w-auto mt-3 md:mt-0" 
                         ${joinButtonDisabled ? 'disabled' : ''}>
-                    ${game.players && game.players.some(p => p.userId === userId) ? '已在遊戲中' : (isFull ? '人數已滿' : '加入遊戲')}
+                    ${isInGame ? '已在遊戲中' : (isFull ? '人數已滿' : '加入遊戲')}
                 </button>
             `;
             
@@ -409,6 +451,10 @@
 
         // 啟動初始化流程
         window.onload = () => {
+            if (!firebaseConfig || firebaseConfig.apiKey.includes("YOUR_API_KEY")) {
+                // 由於前面已經終止腳本並顯示錯誤，這裡只是確認。
+                return; 
+            }
             createGameBtn.disabled = true; // 預設禁用，等待認證
             initFirebase();
         };
