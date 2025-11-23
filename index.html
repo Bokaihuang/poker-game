@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="zh-TW">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -50,25 +50,52 @@
 <body>
   <div id="root"></div>
 
-  <!-- Firebase 初始化 - 使用全域變數 __firebase_config 和 __initial_auth_token -->
+  <!-- Firebase 初始化：已修正，支援 Canvas 環境和外部託管環境 (如 GitHub Pages) -->
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
     import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
     import { getFirestore, doc, onSnapshot, setDoc, updateDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
     import { setLogLevel } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
-    // --- 獲取 Canvas 環境提供的全域配置 ---
-    const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
-    const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : null;
-    const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
+    // --- 【重要】外部環境配置佔位符 ---
+    // *** 如果您在 Canvas 之外運行 (例如 GitHub Pages)，請將以下值替換為您的 Firebase 專案配置！ ***
+    const EXTERNAL_FIREBASE_CONFIG = {
+      apiKey: "AIzaSyCk54DEp6rzvpfQBBNW_iJByZ3boyHEPF0", // <-- 請務必替換成您的 apiKey
+      authDomain: "poolpokergame-b88ed.firebaseapp.com",
+      projectId: "poolpokergame-b88ed", // <-- 請務必替換成您的 projectId
+      storageBucket: "poolpokergame-b88ed.firebasestorage.app",
+      messagingSenderId: "574863840102",
+      appId: "1:574863840102:web:14368aaf84b3640c6eeea7"
+    };
 
-    if (!firebaseConfig) {
-        console.error("Firebase configuration is missing. Cannot initialize Firebase.");
+    // 偵測環境：檢查 Canvas 專屬全域變數是否存在
+    const isCanvasEnvironment = typeof __firebase_config !== 'undefined';
+    
+    // 設置配置變數
+    let firebaseConfig;
+    let initialAuthToken;
+    let appId;
+
+    if (isCanvasEnvironment) {
+        // 1. Canvas 環境：使用注入的全域變數
+        firebaseConfig = JSON.parse(__firebase_config);
+        initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
+        appId = typeof __app_id !== 'undefined' ? __app_id : firebaseConfig.projectId;
+    } else {
+        // 2. 外部環境 (如 GitHub Pages)：使用手動配置
+        firebaseConfig = EXTERNAL_FIREBASE_CONFIG;
+        initialAuthToken = null;
+        appId = firebaseConfig.projectId; 
+        
+        // 外部環境運行時，如果仍是預設值，顯示警告
+        if (firebaseConfig.apiKey === "YOUR_API_KEY") {
+             console.error("Firebase Initialization Error: Please update EXTERNAL_FIREBASE_CONFIG with your actual project keys for external hosting.");
+             // 應用程式將使用匿名登入，但不會連線到資料庫
+        }
     }
     
     // 根據 Firestore 安全規則設定公共資料路徑
-    // 路徑格式: /artifacts/{appId}/public/data/{your_collection_name}/{document_id}
-    // 必須指向一個文件 (Document)，因此路徑段數必須是偶數。
+    // 路徑結構：/artifacts/{appId}/public/data/pool_poker_rooms/main_room
     window.GAME_ROOM_PATH = `artifacts/${appId}/public/data/pool_poker_rooms/main_room`; 
 
     // --- Firebase Initialization ---
@@ -89,9 +116,11 @@
     const authPromise = (async () => {
         try {
             if (initialAuthToken) {
+                // Canvas 環境使用 Custom Token
                 await signInWithCustomToken(window.auth, initialAuthToken);
             } else {
-                await signInAnonymously(window.auth);
+                // 外部環境或無 Token 時使用匿名登入
+                await signInAnonymously(window.auth); 
             }
             console.log("Firebase Auth success.");
         } catch (error) {
@@ -147,7 +176,7 @@
           if(errorMsg.includes("連線錯誤")) setErrorMsg(""); 
         }, (error) => {
           console.error("Snapshot error:", error);
-          setErrorMsg("連線錯誤：請確認您的 Firestore 規則已設定為允許讀寫此路徑。");
+          setErrorMsg("連線錯誤：請確認您的 Firebase 設定已正確填入，且 Firestore 規則已發布以允許匿名使用者讀寫此路徑。");
           setLoading(false); 
         });
 
@@ -205,7 +234,7 @@
           setErrorMsg("");
         } catch (e) {
           console.error("Join failed:", e);
-          setErrorMsg("加入遊戲失敗，可能是權限不足。");
+          setErrorMsg("加入遊戲失敗，可能是權限不足。請檢查 Firebase Console 上的錯誤資訊。");
         }
       };
 
@@ -307,7 +336,7 @@
                {errorMsg && (
                    <div className="bg-red-500/20 text-red-300 p-4 rounded mb-4 text-center max-w-sm">
                        連線發生致命錯誤：{errorMsg}
-                       <div className="text-xs mt-2 text-red-400">請確認 Firebase 設定和安全規則已發布。</div>
+                       <div className="text-xs mt-2 text-red-400">請確認您已在原始碼中填入 **您自己的 Firebase 專案配置**，並允許匿名登入。</div>
                    </div>
                )}
                <div className="text-emerald-400 text-lg">正在連接 Firebase...</div>
@@ -506,4 +535,3 @@
   </script>
 </body>
 </html>
-
