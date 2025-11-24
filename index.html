@@ -86,7 +86,7 @@
       apiKey: "AIzaSyCk54DEp6rzvpfQBBNW_iJByZ3boyHEPF0",
       authDomain: "poolpokergame-b88ed.firebaseapp.com",
       projectId: "poolpokergame-b88ed",
-      storageBucket: "poolpokergame-b88ed.firebasestorage.app", // 保留你指定的值
+      storageBucket: "poolpokergame-b88ed.firebasestorage.app",
       messagingSenderId: "574863840102",
       appId: "1:574863840102:web:14368aaf84b3640c6eeea7"
     };
@@ -119,7 +119,6 @@
     const db = getFirestore(app);
     const roomRef = doc(db, ROOM_PATH);
 
-    // local state
     let currentUser = null;
     let gameState = null;
     let myNickname = '';
@@ -131,7 +130,6 @@
     }
     function setStatus(s) { statusEl.textContent = s; }
 
-    // ---------- Auth ----------
     async function doAnonymousAuth() {
       setStatus('使用匿名登入 Firebase...');
       try {
@@ -153,7 +151,6 @@
       }
     });
 
-    // ---------- Room subscription ----------
     let unsubscribe = null;
     function subscribeRoom() {
       if (unsubscribe) return;
@@ -174,7 +171,6 @@
       });
     }
 
-    // ---------- Deck helpers ----------
     const suits = ['♣','♦','♥','♠'];
     const rankMap = {1:'A',11:'J',12:'Q',13:'K'};
     function buildDeck(){
@@ -200,8 +196,6 @@
       if (!currentUser) { setStatus('尚未登入'); return; }
       const nickInput = (nicknameInput.value || '').trim();
       if (!nickInput) { setStatus('請先輸入暱稱'); return; }
-
-      // nickname must be non-empty; if 'kai' then host
       const isKai = nickInput === 'kai';
       try {
         const snap = await getDoc(roomRef);
@@ -213,7 +207,7 @@
             gameStarted: false,
             notice: isKai ? '房主 kai 已建立房間' : '房間已建立，等待 kai 成為房主',
             updatedAt: serverTimestamp(),
-            deck: [] // initial empty deck until host starts game
+            deck: []
           };
           if (isKai) docData.creatorId = currentUser.uid;
           await setDoc(roomRef, docData);
@@ -223,80 +217,50 @@
           log('created room by', currentUser.uid, 'nick', myNickname);
           return;
         } else {
-          // join existing
           const data = snap.data();
           const players = data.players || {};
           const realCount = Object.values(players).filter(p => p && typeof p === 'object' && p.id).length;
-          if (realCount >= MAX_PLAYERS) {
-            setStatus('房間已滿');
-            return;
-          }
-          if (players[currentUser.uid] && players[currentUser.uid].id) {
-            setStatus('您已在房間中');
-            return;
-          }
+          if (realCount >= MAX_PLAYERS) { setStatus('房間已滿'); return; }
+          if (players[currentUser.uid] && players[currentUser.uid].id) { setStatus('您已在房間中'); return; }
           const updateObj = { updatedAt: serverTimestamp() };
           updateObj[`players.${currentUser.uid}`] = { id: currentUser.uid, nickname: isKai ? 'kai' : nickInput, cards: [], marked: [] };
-          if (isKai) {
-            updateObj['creatorId'] = currentUser.uid;
-            updateObj['notice'] = 'kai 已成為房主';
-            myNickname = 'kai';
-            nicknameInput.value = '';
-          } else {
-            myNickname = nickInput;
-          }
+          if (isKai) { updateObj['creatorId'] = currentUser.uid; updateObj['notice'] = 'kai 已成為房主'; myNickname = 'kai'; nicknameInput.value = ''; }
+          else myNickname = nickInput;
           await updateDoc(roomRef, updateObj);
           setStatus('已加入房間');
           log('joined', currentUser.uid, 'nick', myNickname);
         }
-      } catch (e) {
-        log('join err', e);
-        setStatus('加入失敗：' + (e.message || e));
-      }
+      } catch (e) { log('join err', e); setStatus('加入失敗：' + (e.message || e)); }
     });
 
-    // player leave (regular player): remove players.<uid>
     btnLeave.addEventListener('click', async () => {
       if (!currentUser) return;
       try {
         if (gameState && gameState.creatorId === currentUser.uid && myNickname === 'kai') {
-          // host exit => delete whole doc
           await deleteDoc(roomRef);
           setStatus('房主已退出，房間已刪除');
           log('host deleted room');
           return;
         }
-        // normal player: delete players.<uid>
         await updateDoc(roomRef, {
           [`players.${currentUser.uid}`]: deleteField(),
           updatedAt: serverTimestamp()
         });
         setStatus('已退出房間');
         myNickname = '';
-      } catch (e) {
-        log('leave err', e);
-        setStatus('退出失敗：' + (e.message || e));
-      }
+      } catch (e) { log('leave err', e); setStatus('退出失敗：' + (e.message || e)); }
     });
 
-    // host start (deal)
     btnStart.addEventListener('click', async () => {
       if (!currentUser || !gameState) return;
-      if (gameState.creatorId !== currentUser.uid || myNickname !== 'kai') {
-        setStatus('只有 kai 房主可以發牌');
-        return;
-      }
+      if (gameState.creatorId !== currentUser.uid || myNickname !== 'kai') { setStatus('只有 kai 房主可以發牌'); return; }
       try {
         const players = gameState.players || {};
         const pids = Object.keys(players).filter(k => players[k] && typeof players[k] === 'object' && players[k].id);
         if (pids.length === 0) { setStatus('沒有玩家'); return; }
         if (pids.length > MAX_PLAYERS) { setStatus('人數超過上限'); return; }
-
-        // build 52 card deck
         let deckObj = buildDeck().map(c => c.code);
         shuffle(deckObj);
-
-        // deal sequentially
         const updateObj = { gameStarted: true, notice: '遊戲開始：已發牌', updatedAt: serverTimestamp() };
         pids.forEach((pid, idx) => {
           const start = idx * CARDS_PER_PLAYER;
@@ -304,27 +268,17 @@
           updateObj[`players.${pid}.cards`] = hand;
           updateObj[`players.${pid}.marked`] = [];
         });
-
-        // remaining deck (those not dealt)
         const remainingDeck = deckObj.slice(pids.length * CARDS_PER_PLAYER);
         updateObj['deck'] = remainingDeck;
-
         await updateDoc(roomRef, updateObj);
         setStatus('發牌完成');
         log('deck remaining', remainingDeck.length);
-      } catch (e) {
-        log('start err', e);
-        setStatus('發牌失敗：' + (e.message || e));
-      }
+      } catch (e) { log('start err', e); setStatus('發牌失敗：' + (e.message || e)); }
     });
 
-    // host restart: clear all hands, set gameStarted false and clear deck
     btnRestart.addEventListener('click', async () => {
       if (!currentUser || !gameState) return;
-      if (gameState.creatorId !== currentUser.uid || myNickname !== 'kai') {
-        setStatus('只有 kai 房主可以重開');
-        return;
-      }
+      if (gameState.creatorId !== currentUser.uid || myNickname !== 'kai') { setStatus('只有 kai 房主可以重開'); return; }
       try {
         const players = gameState.players || {};
         const updateObj = { gameStarted: false, notice: '房主已重開遊戲', updatedAt: serverTimestamp() };
@@ -334,17 +288,12 @@
             updateObj[`players.${pid}.marked`] = [];
           }
         });
-        // clear deck as well
         updateObj['deck'] = [];
         await updateDoc(roomRef, updateObj);
         setStatus('已重開');
-      } catch (e) {
-        log('restart err', e);
-        setStatus('重開失敗：' + (e.message || e));
-      }
+      } catch (e) { log('restart err', e); setStatus('重開失敗：' + (e.message || e)); }
     });
 
-    // mark card (player clicking own card) -> append to marked using arrayUnion to reduce race
     async function markCard(pid, cardCode) {
       if (!currentUser || !gameState) return;
       if (!gameState.gameStarted) { setStatus('遊戲尚未開始'); return; }
@@ -352,17 +301,12 @@
       try {
         await updateDoc(roomRef, {
           [`players.${currentUser.uid}.marked`]: arrayUnion(cardCode),
-          notice: `${(gameState.players[currentUser.uid]?.nickname)||'玩家'} 標記 ${cardCode}`,
           updatedAt: serverTimestamp()
         });
         setStatus('已標記 ' + cardCode);
-      } catch (e) {
-        log('mark err', e);
-        setStatus('標記失敗：' + (e.message || e));
-      }
+      } catch (e) { log('mark err', e); setStatus('標記失敗：' + (e.message || e)); }
     }
 
-    // ---------- Foul: draw one card from deck (transaction) ----------
     async function foulDrawFor(playerId) {
       if (!currentUser) return;
       try {
@@ -375,38 +319,25 @@
           const target = players[playerId];
           if (!target || !target.id) throw new Error('玩家不存在');
           const currentCount = Array.isArray(target.cards) ? target.cards.length : 0;
-          if (currentCount >= CARDS_PER_PLAYER + MAX_EXTRA) {
-            throw new Error('此玩家已達最多 14 張（不能再抽）');
-          }
-          if (deck.length === 0) {
-            throw new Error('剩餘牌已經抽完');
-          }
-          // draw top (last) card
+          if (currentCount >= CARDS_PER_PLAYER + MAX_EXTRA) throw new Error('此玩家已達最多 14 張（不能再抽）');
+          if (deck.length === 0) throw new Error('剩餘牌已經抽完');
           const drawn = deck.pop();
-          // push into player's cards
           const newPlayers = { ...players, [playerId]: { ...target, cards: [...(target.cards||[]), drawn] } };
-          // commit
+          // 移除 notice，不通知其他玩家
           tx.update(roomRef, {
             players: newPlayers,
             deck: deck,
-            updatedAt: serverTimestamp(),
-            notice: `${target.nickname || '玩家'} 犯規抽到 ${drawn}`
+            updatedAt: serverTimestamp()
           });
         });
         setStatus('犯規抽牌成功');
-      } catch (e) {
-        log('foul draw err', e);
-        setStatus('犯規抽牌失敗：' + (e.message || e));
-      }
+      } catch (e) { log('foul draw err', e); setStatus('犯規抽牌失敗：' + (e.message || e)); }
     }
 
-    // ---------- Render UI ----------
     function renderUI() {
       const players = (gameState && gameState.players) ? gameState.players : {};
       const cleanPlayers = {};
-      Object.keys(players).forEach(k => {
-        if (players[k] && typeof players[k] === 'object' && players[k].id) cleanPlayers[k] = players[k];
-      });
+      Object.keys(players).forEach(k => { if (players[k] && typeof players[k] === 'object' && players[k].id) cleanPlayers[k] = players[k]; });
 
       if (!gameState) {
         joinPanel.classList.remove('hidden');
@@ -426,36 +357,26 @@
 
       joinPanel.classList.add('hidden');
       roomPanel.classList.remove('hidden');
-
       myNickname = cleanPlayers[currentUser.uid].nickname || myNickname;
       myNickEl.textContent = myNickname;
 
-      const ownerNick = cleanPlayers[gameState.creatorId]?.nickname || '—';
-      roomOwnerEl.textContent = ownerNick;
+      roomOwnerEl.textContent = cleanPlayers[gameState.creatorId]?.nickname || '—';
       roomCountEl.textContent = `${Object.keys(cleanPlayers).length} / ${MAX_PLAYERS}`;
       noticeEl.textContent = gameState.notice || '';
 
       const amHost = gameState.creatorId === currentUser.uid && myNickname === 'kai';
-      if (amHost) {
-        btnStart.classList.remove('hidden');
-        btnRestart.classList.remove('hidden');
-      } else {
-        btnStart.classList.add('hidden');
-        btnRestart.classList.add('hidden');
-      }
+      btnStart.classList.toggle('hidden', !amHost);
+      btnRestart.classList.toggle('hidden', !amHost);
 
-      // build players area
       playersArea.innerHTML = '';
-      const pList = Object.values(cleanPlayers);
-      pList.sort((a,b) => (a.id === currentUser.uid ? -1 : (b.id === currentUser.uid ? 1 : 0)));
+      const pList = Object.values(cleanPlayers).sort((a,b) => (a.id===currentUser.uid?-1:(b.id===currentUser.uid?1:0)));
 
       pList.forEach(p => {
         const wrapper = document.createElement('div');
         wrapper.className = 'p-3 rounded bg-slate-800 border border-slate-700';
-
         const header = document.createElement('div');
         header.className = 'player-header mb-2';
-        // left: name | right: marked/count & foul button
+
         const left = document.createElement('div');
         left.innerHTML = `<strong>${p.nickname || ('p_'+p.id.slice(0,6))}</strong> ${p.id===currentUser.uid?'<span class="small"> (您)</span>':''}`;
 
@@ -467,31 +388,20 @@
         countSpan.className = 'small';
         const currentCardsCount = (p.cards||[]).length;
         countSpan.textContent = `牌 ${currentCardsCount} / ${CARDS_PER_PLAYER + MAX_EXTRA}`;
-
-        // foul button
-        const foulBtn = document.createElement('button');
-        foulBtn.className = 'foul-btn';
-        foulBtn.textContent = '犯規 +1';
-        // disable if not game started or player already >=14 or deck empty
-        const deckLen = (gameState && Array.isArray(gameState.deck)) ? gameState.deck.length : 0;
-        if (!gameState.gameStarted) foulBtn.disabled = true;
-        if (currentCardsCount >= CARDS_PER_PLAYER + MAX_EXTRA) foulBtn.disabled = true;
-        if (deckLen === 0) foulBtn.disabled = true;
-        // attach listener
-        foulBtn.onclick = () => {
-          // only allow clicking if this player is the current user (we still allow host to draw for self)
-          // requirement: every player has their own foul button (they click their own)
-          if (p.id !== currentUser.uid) {
-            // If you want players to be able to make others draw, change this behavior.
-            setStatus('您只能為自己按犯規（請切換到該玩家的帳號）');
-            return;
-          }
-          // call transaction draw
-          foulDrawFor(p.id);
-        };
-
         right.appendChild(countSpan);
-        right.appendChild(foulBtn);
+
+        // 只給自己犯規按鈕
+        if (p.id === currentUser.uid) {
+          const foulBtn = document.createElement('button');
+          foulBtn.className = 'foul-btn';
+          foulBtn.textContent = '犯規 +1';
+          const deckLen = (gameState && Array.isArray(gameState.deck)) ? gameState.deck.length : 0;
+          if (!gameState.gameStarted) foulBtn.disabled = true;
+          if (currentCardsCount >= CARDS_PER_PLAYER + MAX_EXTRA) foulBtn.disabled = true;
+          if (deckLen === 0) foulBtn.disabled = true;
+          foulBtn.onclick = () => foulDrawFor(p.id);
+          right.appendChild(foulBtn);
+        }
 
         header.appendChild(left);
         header.appendChild(right);
@@ -501,18 +411,18 @@
         cardsRow.className = 'flex gap-2 flex-wrap';
 
         const cards = p.cards || [];
-        if (!gameState.gameStarted && cards.length === 0) {
+        if (!gameState.gameStarted && cards.length===0) {
           const hint = document.createElement('div');
           hint.className = 'small text-slate-400';
           hint.textContent = '等待遊戲開始';
           wrapper.appendChild(hint);
         }
 
-        cards.forEach((c, idx) => {
+        cards.forEach(c => {
           const cardEl = document.createElement('div');
           cardEl.className = 'card';
-          const isMine = currentUser && p.id === currentUser.uid;
-          const isMarked = (p.marked || []).includes(c);
+          const isMine = currentUser && p.id===currentUser.uid;
+          const isMarked = (p.marked||[]).includes(c);
 
           if (isMarked) cardEl.classList.add('marked');
 
@@ -522,18 +432,10 @@
             cardEl.style.cursor = 'pointer';
             cardEl.title = isMarked ? '已標記' : '點擊以標記';
             cardEl.onclick = () => markCard(p.id, c);
-            if (c[0] === '♥' || c[0] === '♦') cardEl.classList.add('suit-red');
-            else cardEl.classList.add('suit-black');
+            if (c[0]==='♥'||c[0]==='♦') cardEl.classList.add('suit-red'); else cardEl.classList.add('suit-black');
           } else {
-            if (isMarked) {
-              cardEl.classList.add('card-face');
-              cardEl.textContent = c;
-              if (c[0] === '♥' || c[0] === '♦') cardEl.classList.add('suit-red');
-              else cardEl.classList.add('suit-black');
-            } else {
-              cardEl.classList.add('card-back');
-              cardEl.textContent = ' ';
-            }
+            if (isMarked) { cardEl.classList.add('card-face'); cardEl.textContent = c; if (c[0]==='♥'||c[0]==='♦') cardEl.classList.add('suit-red'); else cardEl.classList.add('suit-black'); }
+            else { cardEl.classList.add('card-back'); cardEl.textContent = ' '; }
           }
           cardsRow.appendChild(cardEl);
         });
@@ -543,12 +445,7 @@
       });
     }
 
-    // ---------- Start ----------
-    (async function(){
-      await doAnonymousAuth();
-    })();
-
+    (async function(){ await doAnonymousAuth(); })();
   </script>
 </body>
 </html>
-
