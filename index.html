@@ -1,41 +1,47 @@
+
+
+
 <!doctype html>
 <html lang="zh-TW">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Pool Poker — Single Room</title>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>Pool Poker — main-room</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <style>
-    body { background:#0f172a; color:#e6eef8; font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial; }
-    .card { width:48px; height:64px; border-radius:8px; display:flex;align-items:center;justify-content:center;font-weight:700;box-shadow:0 4px 12px rgba(2,6,23,.6); }
-    .card-back { background:linear-gradient(180deg,#0b1220,#091026); border:2px solid rgba(255,255,255,.04); color:transparent; }
-    .card-face { background:white; color:#0b1220; border:2px solid rgba(2,6,23,.06); }
+    body { background:#071024; color:#e6eef8; font-family: Inter, system-ui, -apple-system, "Segoe UI", Roboto, Arial; }
+    .card { width:54px; height:74px; border-radius:8px; display:flex;align-items:center;justify-content:center;font-weight:700;box-shadow:0 6px 16px rgba(0,0,0,.6); }
+    .card-back { background:linear-gradient(180deg,#0b1220,#081228); border:2px solid rgba(255,255,255,.04); color:transparent; }
+    .card-face { background:white; color:#071024; border:2px solid rgba(2,6,23,.06); }
     .marked { outline:3px solid #f59e0b; transform:scale(1.05); }
     .small { font-size:.85rem; color:#cfe8ff; }
+    .suit-red { color:#dc2626; } /* diamonds/hearts */
+    .suit-black { color:#111827; } /* clubs/spades */
   </style>
 </head>
 <body>
-  <div class="max-w-4xl mx-auto p-6">
-    <h1 class="text-2xl font-bold mb-4">Pool Poker — 單一房間 (main_room)</h1>
+  <div class="max-w-5xl mx-auto p-6">
+    <h1 class="text-2xl font-bold mb-4">Pool Poker — main-room</h1>
 
-    <div id="status" class="mb-4 text-sm small">初始化中…（請開 Console 查看詳細）</div>
+    <div id="status" class="mb-4 text-sm small">初始化中…（請開 Console 查看）</div>
 
-    <div id="controls" class="mb-6 grid grid-cols-1 sm:grid-cols-3 gap-3">
+    <!-- Nick input (before join) -->
+    <div id="joinPanel" class="mb-6 grid grid-cols-1 sm:grid-cols-3 gap-3">
       <div class="col-span-2">
-        <label class="small">您的暱稱（房主固定為 <strong>kai</strong>）</label>
-        <input id="nickname" class="w-full p-2 rounded bg-slate-800 border border-slate-700" placeholder="輸入暱稱（若您是房主會自動成為 kai）" />
+        <label class="small">暱稱（若輸入 kai，您將為房主）</label>
+        <input id="nickname" class="w-full p-2 rounded bg-slate-800 border border-slate-700" placeholder="輸入暱稱（例：kai / amy）" />
       </div>
       <div>
         <button id="btnJoin" class="w-full py-2 rounded bg-emerald-600 hover:bg-emerald-500">加入房間</button>
-        <button id="btnLeave" class="w-full py-2 rounded mt-2 bg-slate-700 hidden">離開房間</button>
       </div>
     </div>
 
-    <div id="roomInfo" class="mb-4 p-4 rounded bg-slate-800 border border-slate-700 hidden">
-      <div class="flex items-center justify-between mb-2">
+    <!-- Room UI -->
+    <div id="roomPanel" class="mb-6 p-4 rounded bg-slate-900 border border-slate-700 hidden">
+      <div class="flex items-center justify-between mb-3">
         <div>
           <div class="text-xs small">房間 ID</div>
-          <div id="roomId" class="font-mono">main_room</div>
+          <div class="font-mono">main-room</div>
         </div>
         <div>
           <div class="text-xs small">房主</div>
@@ -45,348 +51,359 @@
           <div class="text-xs small">人數</div>
           <div id="roomCount">0 / 5</div>
         </div>
+        <div>
+          <div class="text-xs small">我的暱稱</div>
+          <div id="myNick" class="font-mono">—</div>
+        </div>
       </div>
 
-      <div class="flex gap-2 items-center mb-3">
+      <div class="flex gap-2 items-center mb-4">
         <button id="btnStart" class="px-3 py-2 rounded bg-yellow-600 hover:bg-yellow-500 hidden">發牌（房主）</button>
         <button id="btnRestart" class="px-3 py-2 rounded bg-slate-700 hover:bg-slate-600 hidden">重開（房主）</button>
+        <button id="btnLeave" class="px-3 py-2 rounded bg-red-600 hover:bg-red-500 ml-auto">退出房間</button>
         <div id="notice" class="ml-4 small text-slate-300"></div>
       </div>
 
-      <div class="grid grid-cols-1 md:grid-cols-2 gap-4" id="playersArea"></div>
+      <div id="playersArea" class="grid grid-cols-1 md:grid-cols-2 gap-4"></div>
     </div>
 
     <div id="debug" class="mt-6 p-3 rounded bg-slate-900 border border-slate-700 text-xs small">
-      <div><strong>Debug Console (只會顯示少量資訊)</strong></div>
+      <div><strong>Debug (console)</strong></div>
       <pre id="log" class="text-xs mt-2"></pre>
     </div>
   </div>
 
   <script type="module">
-    // Firebase v11 modules
     import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
     import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-    import { getFirestore, doc, onSnapshot, setDoc, updateDoc, getDoc, arrayUnion, serverTimestamp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+    import {
+      getFirestore, doc, onSnapshot, setDoc, updateDoc, getDoc,
+      deleteDoc, serverTimestamp, arrayUnion, deleteField
+    } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
-    // -----------------------------
-    // CONFIG (請按需修改；預設使用你給的值)
+    // ---------- CONFIG ----------
     const EXTERNAL_FIREBASE_CONFIG = {
       apiKey: "AIzaSyCk54DEp6rzvpfQBBNW_iJByZ3boyHEPF0",
       authDomain: "poolpokergame-b88ed.firebaseapp.com",
       projectId: "poolpokergame-b88ed",
-      // 按你的要求保留此值
-      storageBucket: "poolpokergame-b88ed.firebasestorage.app",
+      storageBucket: "poolpokergame-b88ed.firebasestorage.app", // 保留你指定的值
       messagingSenderId: "574863840102",
       appId: "1:574863840102:web:14368aaf84b3640c6eeea7"
     };
-    // -----------------------------
 
-    // Firestore path for the single room
     const APP_ID = EXTERNAL_FIREBASE_CONFIG.projectId;
-    const ROOM_DOC_PATH = `artifacts/${APP_ID}/public/data/pool_poker_rooms/main_room`;
-    const MAX_PLAYERS = 5;
+    const ROOM_PATH = `artifacts/${APP_ID}/public/data/pool_poker_rooms/main_room`;
     const CARDS_PER_PLAYER = 8;
+    const MAX_PLAYERS = 5;
 
-    // UI elements
+    // ---------- UI elements ----------
     const statusEl = document.getElementById('status');
     const logEl = document.getElementById('log');
     const nicknameInput = document.getElementById('nickname');
     const btnJoin = document.getElementById('btnJoin');
-    const btnLeave = document.getElementById('btnLeave');
-    const roomInfoEl = document.getElementById('roomInfo');
+    const joinPanel = document.getElementById('joinPanel');
+    const roomPanel = document.getElementById('roomPanel');
     const roomOwnerEl = document.getElementById('roomOwner');
     const roomCountEl = document.getElementById('roomCount');
     const playersArea = document.getElementById('playersArea');
-    const roomIdEl = document.getElementById('roomId');
-    const noticeEl = document.getElementById('notice');
+    const myNickEl = document.getElementById('myNick');
     const btnStart = document.getElementById('btnStart');
     const btnRestart = document.getElementById('btnRestart');
+    const btnLeave = document.getElementById('btnLeave');
+    const noticeEl = document.getElementById('notice');
 
-    // init firebase
+    // ---------- Firebase init ----------
     const app = initializeApp(EXTERNAL_FIREBASE_CONFIG);
     const auth = getAuth(app);
     const db = getFirestore(app);
-    const roomDocRef = doc(db, ROOM_DOC_PATH);
+    const roomRef = doc(db, ROOM_PATH);
 
     // local state
     let currentUser = null;
     let gameState = null;
-    let isJoined = false;
+    let myNickname = '';
 
-    // small helper logs
     function log(...args) {
       console.log(...args);
-      logEl.textContent += args.map(a=> (typeof a==='object' ? JSON.stringify(a) : String(a))).join(' ') + "\\n";
+      logEl.textContent += args.map(a => (typeof a === 'object' ? JSON.stringify(a) : String(a))).join(' ') + "\\n";
       logEl.scrollTop = logEl.scrollHeight;
     }
     function setStatus(s) { statusEl.textContent = s; }
 
     // ---------- Auth ----------
-    async function doAuth() {
-      setStatus('正在登入 Firebase (匿名)...');
+    async function doAnonymousAuth() {
+      setStatus('使用匿名登入 Firebase...');
       try {
         const cred = await signInAnonymously(auth);
-        log('Signed in anonymously uid=', cred.user.uid);
+        log('signed in uid=', cred.user.uid);
       } catch (e) {
-        log('Auth failed', e);
-        setStatus('Auth 失敗，請檢查 Firebase Console（需啟用匿名登入）');
+        log('auth failed', e);
+        setStatus('Auth 失敗：請確認 Firebase Console 已啟用匿名登入');
       }
     }
 
-    onAuthStateChanged(auth, async (user) => {
-      if (!user) {
-        currentUser = null;
-        setStatus('未登入');
-        return;
-      }
+    onAuthStateChanged(auth, (user) => {
       currentUser = user;
-      setStatus('已登入：' + currentUser.uid);
-      log('onAuthStateChanged', currentUser.uid);
-      // auto-subscribe to room document
-      subscribeRoom();
+      if (user) {
+        setStatus('已登入：' + user.uid);
+        subscribeRoom();
+      } else {
+        setStatus('未登入');
+      }
     });
 
     // ---------- Room subscription ----------
-    let unsubscribeRoom = null;
+    let unsubscribe = null;
     function subscribeRoom() {
-      if (unsubscribeRoom) return;
-      setStatus('訂閱房間資料...');
-      unsubscribeRoom = onSnapshot(roomDocRef, (snap) => {
-        if (snap.exists()) {
-          gameState = snap.data();
-          renderRoom();
-          setStatus('已連線到房間');
-        } else {
+      if (unsubscribe) return;
+      setStatus('訂閱 main-room...');
+      unsubscribe = onSnapshot(roomRef, (snap) => {
+        if (!snap.exists()) {
           gameState = null;
-          renderRoom();
-          setStatus('房間尚未建立（尚無人）');
+          renderUI();
+          setStatus('房間尚未建立或已被清空');
+          return;
         }
+        gameState = snap.data();
+        renderUI();
+        setStatus('已連到房間');
       }, (err) => {
-        log('Snapshot error', err);
-        setStatus('無法訂閱房間：' + (err.message || err));
+        log('snapshot err', err);
+        setStatus('訂閱失敗：' + (err.message || err));
       });
     }
 
-    // ---------- UI actions ----------
+    // ---------- Deck helpers ----------
+    const suits = ['♣','♦','♥','♠'];
+    const rankMap = {1:'A',11:'J',12:'Q',13:'K'};
+    function buildDeck(){
+      const deck = [];
+      for (let r=1;r<=13;r++){
+        for (let s=0;s<4;s++){
+          const rank = rankMap[r] || String(r);
+          deck.push({suit: suits[s], rank, code: `${suits[s]}${rank}`});
+        }
+      }
+      return deck;
+    }
+    function shuffle(arr){
+      for (let i = arr.length -1; i>0; i--){
+        const j = Math.floor(Math.random()*(i+1));
+        [arr[i], arr[j]] = [arr[j], arr[i]];
+      }
+      return arr;
+    }
+
+    // ---------- Join / Leave / Host actions ----------
     btnJoin.addEventListener('click', async () => {
       if (!currentUser) { setStatus('尚未登入'); return; }
-      // If room not exists, we'll create it with this user as creator and nickname 'kai'
-      const desiredNick = (nicknameInput.value || '').trim();
+      const nickInput = (nicknameInput.value || '').trim();
+      if (!nickInput) { setStatus('請先輸入暱稱'); return; }
+
+      // nickname must be non-empty; if 'kai' then host
+      const isKai = nickInput === 'kai';
       try {
-        const snap = await getDoc(roomDocRef);
+        const snap = await getDoc(roomRef);
         if (!snap.exists()) {
-          // create room and set this user as creator (房主暱稱固定 kai)
+          // create room and set creator to this user if kai, else create room with no creator? requirement: kai player is host => if first to create and nick != kai, still set creatorId? 
+          // We'll set creatorId if the joining user is kai; otherwise room created without creator until kai joins
           const players = {};
-          players[currentUser.uid] = { id: currentUser.uid, nickname: 'kai', cards: [], marked: [] };
-          await setDoc(roomDocRef, {
-            creatorId: currentUser.uid,
+          players[currentUser.uid] = { id: currentUser.uid, nickname: isKai ? 'kai' : nickInput, cards: [], marked: [] };
+          const docData = {
             players,
             gameStarted: false,
-            notice: '房間建立，房主為 kai',
+            notice: isKai ? '房主 kai 已建立房間' : '房間已建立，等待 kai 成為房主',
             updatedAt: serverTimestamp()
-          });
-          isJoined = true;
-          btnLeave.classList.remove('hidden');
-          nicknameInput.value = ''; // owner fixed to kai
-          setStatus('已建立房間並以 kai 身份加入（您為房主）');
-          log('Room created by', currentUser.uid);
+          };
+          if (isKai) docData.creatorId = currentUser.uid;
+          await setDoc(roomRef, docData);
+          myNickname = isKai ? 'kai' : nickInput;
+          nicknameInput.value = isKai ? '' : nickInput;
+          setStatus(isKai ? '已以 kai 建立並加入房間（您為房主）' : '房間建立並加入，請等待 kai 加入成為房主');
+          log('created room by', currentUser.uid, 'nick', myNickname);
           return;
         } else {
-          // room exists: join as a normal player
+          // join existing
           const data = snap.data();
           const players = data.players || {};
-          if (players[currentUser.uid]) {
+          // count real players
+          const realCount = Object.values(players).filter(p => p && typeof p === 'object' && p.id).length;
+          if (realCount >= MAX_PLAYERS) {
+            setStatus('房間已滿');
+            return;
+          }
+          if (players[currentUser.uid] && players[currentUser.uid].id) {
             setStatus('您已在房間中');
-            isJoined = true;
-            btnLeave.classList.remove('hidden');
             return;
           }
-          const count = Object.keys(players).length;
-          if (count >= MAX_PLAYERS) {
-            setStatus('房間已滿，無法加入');
-            return;
+          // If joining as kai: we must set creatorId if not set yet (or if existing creator is someone else? requirement: kai is host; so we treat kai's presence as host)
+          const updateObj = { updatedAt: serverTimestamp() };
+          updateObj[`players.${currentUser.uid}`] = { id: currentUser.uid, nickname: isKai ? 'kai' : nickInput, cards: [], marked: [] };
+          if (isKai) {
+            // set as creatorId (overwrite if exists)
+            updateObj['creatorId'] = currentUser.uid;
+            updateObj['notice'] = 'kai 已成為房主';
+            myNickname = 'kai';
+            nicknameInput.value = '';
+          } else {
+            myNickname = nickInput;
           }
-          // choose nickname: provided or fallback to uid short
-          const nick = desiredNick || ('p_' + currentUser.uid.slice(0,6));
-          // use field-path update to avoid overwriting entire players object
-          await updateDoc(roomDocRef, {
-            [`players.${currentUser.uid}`]: {
-              id: currentUser.uid,
-              nickname: nick,
-              cards: [],
-              marked: []
-            },
-            updatedAt: serverTimestamp()
-          });
-          isJoined = true;
-          btnLeave.classList.remove('hidden');
+          await updateDoc(roomRef, updateObj);
           setStatus('已加入房間');
-          log('Joined as', nick);
+          log('joined', currentUser.uid, 'nick', myNickname);
         }
       } catch (e) {
-        log('Join error', e);
+        log('join err', e);
         setStatus('加入失敗：' + (e.message || e));
       }
     });
 
+    // player leave (regular player): remove players.<uid>
     btnLeave.addEventListener('click', async () => {
       if (!currentUser) return;
       try {
-        // remove our player entry
-        // Firestore does not have a direct delete of map field via updateDoc except using deleteField
-        // but to keep simple (功能優先)，我們 set players.<uid> to null (or {}) — better to use update with deleteField
-        // here we'll set to null then let rule/cleanup handle it; but to avoid the need, we will use updateDoc with deleteField
-        // however deleteField must be imported; for simplicity we'll overwrite with {}
-        await updateDoc(roomDocRef, {
-          [`players.${currentUser.uid}`]: null,
+        // if current user is host (creatorId), then host-leave should delete the room (handled separately)
+        if (gameState && gameState.creatorId === currentUser.uid && myNickname === 'kai') {
+          // host exit => delete whole doc
+          await deleteDoc(roomRef);
+          setStatus('房主已退出，房間已刪除');
+          log('host deleted room');
+          return;
+        }
+        // normal player: delete players.<uid>
+        await updateDoc(roomRef, {
+          [`players.${currentUser.uid}`]: deleteField(),
           updatedAt: serverTimestamp()
         });
-        isJoined = false;
-        btnLeave.classList.add('hidden');
-        setStatus('已離開房間');
+        // local UI will be updated by onSnapshot which sees player removed
+        setStatus('已退出房間');
+        myNickname = '';
       } catch (e) {
-        log('Leave failed', e);
-        setStatus('離開失敗：' + (e.message || e));
+        log('leave err', e);
+        setStatus('退出失敗：' + (e.message || e));
       }
     });
 
+    // host start (deal)
     btnStart.addEventListener('click', async () => {
       if (!currentUser || !gameState) return;
-      if (gameState.creatorId !== currentUser.uid) {
-        setStatus('僅房主可發牌');
-        return;
-      }
-      // ensure there is at least 1 player
-      const players = gameState.players || {};
-      const pids = Object.keys(players);
-      if (pids.length === 0) {
-        setStatus('沒有玩家');
-        return;
-      }
-      if (pids.length > MAX_PLAYERS) {
-        setStatus('人數超過上限');
+      if (gameState.creatorId !== currentUser.uid || myNickname !== 'kai') {
+        setStatus('只有 kai 房主可以發牌');
         return;
       }
       try {
-        // build real 52-card deck (1..13 each 4)
-        let deck = [];
-        for (let r=1;r<=13;r++){
-          for (let k=0;k<4;k++) deck.push(r);
-        }
-        // shuffle
-        for (let i = deck.length - 1; i > 0; i--) {
-          const j = Math.floor(Math.random() * (i + 1));
-          [deck[i], deck[j]] = [deck[j], deck[i]];
-        }
-        // deal CARDS_PER_PLAYER to each player in order of pids
-        const newPlayers = {};
+        const players = gameState.players || {};
+        const pids = Object.keys(players).filter(k => players[k] && typeof players[k] === 'object' && players[k].id);
+        if (pids.length === 0) { setStatus('沒有玩家'); return; }
+        if (pids.length > MAX_PLAYERS) { setStatus('人數超過上限'); return; }
+
+        // build 52 card deck
+        let deck = buildDeck().map(c => c.code);
+        shuffle(deck);
+
+        // deal sequentially
+        const updateObj = { gameStarted: true, notice: '遊戲開始：已發牌', updatedAt: serverTimestamp() };
         pids.forEach((pid, idx) => {
           const start = idx * CARDS_PER_PLAYER;
           const hand = deck.slice(start, start + CARDS_PER_PLAYER);
-          newPlayers[pid] = {
-            ...players[pid],
-            cards: hand,
-            marked: []
-          };
-        });
-        // write back: set players.* for each player (using field paths to minimize overwrite)
-        const updateObj = { gameStarted: true, notice: '遊戲開始：已發牌', updatedAt: serverTimestamp() };
-        pids.forEach(pid => {
-          updateObj[`players.${pid}.cards`] = newPlayers[pid].cards;
+          updateObj[`players.${pid}.cards`] = hand;
           updateObj[`players.${pid}.marked`] = [];
         });
-        await updateDoc(roomDocRef, updateObj);
-        setStatus('發牌完畢');
+        await updateDoc(roomRef, updateObj);
+        setStatus('發牌完成');
       } catch (e) {
-        log('Start error', e);
+        log('start err', e);
         setStatus('發牌失敗：' + (e.message || e));
       }
     });
 
+    // host restart: clear all hands, set gameStarted false
     btnRestart.addEventListener('click', async () => {
       if (!currentUser || !gameState) return;
-      if (gameState.creatorId !== currentUser.uid) {
-        setStatus('僅房主可重開');
+      if (gameState.creatorId !== currentUser.uid || myNickname !== 'kai') {
+        setStatus('只有 kai 房主可以重開');
         return;
       }
       try {
-        // reset cards to empty and gameStarted -> false
         const players = gameState.players || {};
-        const updateObj = { gameStarted: false, notice: '房主已重開', updatedAt: serverTimestamp() };
+        const updateObj = { gameStarted: false, notice: '房主已重開遊戲', updatedAt: serverTimestamp() };
         Object.keys(players).forEach(pid => {
-          updateObj[`players.${pid}.cards`] = [];
-          updateObj[`players.${pid}.marked`] = [];
+          if (players[pid] && typeof players[pid] === 'object' && players[pid].id) {
+            updateObj[`players.${pid}.cards`] = [];
+            updateObj[`players.${pid}.marked`] = [];
+          }
         });
-        await updateDoc(roomDocRef, updateObj);
+        await updateDoc(roomRef, updateObj);
         setStatus('已重開');
       } catch (e) {
-        log('Restart error', e);
+        log('restart err', e);
         setStatus('重開失敗：' + (e.message || e));
       }
     });
 
-    // clicking a card -> mark number (only allowed when gameStarted)
-    async function markCard(playerId, cardValue) {
+    // mark card (player clicking own card) -> append to marked using arrayUnion to reduce race
+    async function markCard(pid, cardCode) {
       if (!currentUser || !gameState) return;
-      if (!gameState.gameStarted) {
-        setStatus('遊戲尚未開始');
-        return;
-      }
-      // only your own marked array should be updated by you
-      if (playerId !== currentUser.uid) {
-        setStatus('只能標記自己的卡');
-        return;
-      }
-      const myData = (gameState.players || {})[currentUser.uid];
-      if (!myData) return;
-      if ((myData.marked || []).includes(cardValue)) {
-        setStatus('已標記過');
-        return;
-      }
+      if (!gameState.gameStarted) { setStatus('遊戲尚未開始'); return; }
+      if (pid !== currentUser.uid) { setStatus('只能標記自己的卡'); return; }
       try {
-        // append to marked via direct set of array (functionality first) — could use arrayUnion but we didn't import it to keep things tight
-        const newMarked = [...(myData.marked || []), cardValue];
-        await updateDoc(roomDocRef, {
-          [`players.${currentUser.uid}.marked`]: newMarked,
-          notice: `${myData.nickname || '玩家'} 標記了 ${cardValue}`,
+        await updateDoc(roomRef, {
+          [`players.${currentUser.uid}.marked`]: arrayUnion(cardCode),
+          notice: `${(gameState.players[currentUser.uid]?.nickname)||'玩家'} 標記 ${cardCode}`,
           updatedAt: serverTimestamp()
         });
-        setStatus('已標記 ' + cardValue);
+        setStatus('已標記 ' + cardCode);
       } catch (e) {
-        log('Mark error', e);
+        log('mark err', e);
         setStatus('標記失敗：' + (e.message || e));
       }
     }
 
-    // ---------- Render ----------
-    function renderRoom() {
-      // show/hide room info
-      if (!gameState) {
-        roomInfoEl.classList.add('hidden');
-        btnStart.classList.add('hidden');
-        btnRestart.classList.add('hidden');
-        roomIdEl.textContent = 'main_room';
-        roomOwnerEl.textContent = '—';
-        roomCountEl.textContent = '0 / ' + MAX_PLAYERS;
-        playersArea.innerHTML = '';
-        noticeEl.textContent = '';
-        return;
-      }
-      roomInfoEl.classList.remove('hidden');
-      roomIdEl.textContent = 'main_room';
-      roomOwnerEl.textContent = (gameState.players && Object.values(gameState.players).find(p => p.id === gameState.creatorId)?.nickname) || 'kai';
-      const players = gameState.players || {};
+    // ---------- Render UI ----------
+    function renderUI() {
+      // not in room if gameState null or players doesn't include us
+      const players = (gameState && gameState.players) ? gameState.players : {};
       const cleanPlayers = {};
-      // remove null entries (we used null for leave)
       Object.keys(players).forEach(k => {
         if (players[k] && typeof players[k] === 'object' && players[k].id) cleanPlayers[k] = players[k];
       });
-      const count = Object.keys(cleanPlayers).length;
-      roomCountEl.textContent = `${count} / ${MAX_PLAYERS}`;
+
+      // if room doc doesn't exist -> show join panel
+      if (!gameState) {
+        joinPanel.classList.remove('hidden');
+        roomPanel.classList.add('hidden');
+        myNickEl.textContent = '—';
+        return;
+      }
+
+      // if we are not a player in players map -> show join panel
+      const amInRoom = currentUser && cleanPlayers[currentUser.uid];
+      if (!amInRoom) {
+        joinPanel.classList.remove('hidden');
+        roomPanel.classList.add('hidden');
+        // show owner and count though
+        roomOwnerEl.textContent = cleanPlayers[gameState.creatorId]?.nickname || '—';
+        roomCountEl.textContent = `${Object.keys(cleanPlayers).length} / ${MAX_PLAYERS}`;
+        return;
+      }
+
+      // else show room panel
+      joinPanel.classList.add('hidden');
+      roomPanel.classList.remove('hidden');
+
+      // my nick
+      myNickname = cleanPlayers[currentUser.uid].nickname || myNickname;
+      myNickEl.textContent = myNickname;
+
+      // owner info
+      const ownerNick = cleanPlayers[gameState.creatorId]?.nickname || '—';
+      roomOwnerEl.textContent = ownerNick;
+      roomCountEl.textContent = `${Object.keys(cleanPlayers).length} / ${MAX_PLAYERS}`;
       noticeEl.textContent = gameState.notice || '';
-      // owner controls
-      const amOwner = currentUser && gameState.creatorId === currentUser.uid;
-      if (amOwner) {
+
+      // show host controls only if i'm kai and creatorId matches me
+      const amHost = gameState.creatorId === currentUser.uid && myNickname === 'kai';
+      if (amHost) {
         btnStart.classList.remove('hidden');
         btnRestart.classList.remove('hidden');
       } else {
@@ -394,48 +411,57 @@
         btnRestart.classList.add('hidden');
       }
 
-      // build playersArea
+      // build players area
       playersArea.innerHTML = '';
-      // order: current user first if present, then others
+      // order: me first
       const pList = Object.values(cleanPlayers);
-      pList.sort((a,b)=> (a.id===currentUser?.uid ? -1 : (b.id===currentUser?.uid ? 1 : 0)));
-      pList.forEach(p => {
-        const cardContainer = document.createElement('div');
-        cardContainer.className = 'p-3 rounded bg-slate-900 border border-slate-700';
+      pList.sort((a,b) => (a.id === currentUser.uid ? -1 : (b.id === currentUser.uid ? 1 : 0)));
 
-        const title = document.createElement('div');
-        title.className = 'flex justify-between items-center mb-2';
-        title.innerHTML = `<div><strong>${p.nickname || ('p_' + p.id.slice(0,6))}</strong> ${p.id===currentUser?.uid?'<span class="small"> (您)</span>':''}</div>
-                           <div class="small">擊落 ${ (p.marked||[]).length } / ${CARDS_PER_PLAYER}</div>`;
-        cardContainer.appendChild(title);
+      pList.forEach(p => {
+        const wrapper = document.createElement('div');
+        wrapper.className = 'p-3 rounded bg-slate-800 border border-slate-700';
+
+        const header = document.createElement('div');
+        header.className = 'flex justify-between items-center mb-2';
+        header.innerHTML = `<div><strong>${p.nickname || ('p_'+p.id.slice(0,6))}</strong> ${p.id===currentUser.uid?'<span class="small"> (您)</span>':''}</div>
+                            <div class="small">標記 ${(p.marked||[]).length} / ${CARDS_PER_PLAYER}</div>`;
+        wrapper.appendChild(header);
 
         const cardsRow = document.createElement('div');
         cardsRow.className = 'flex gap-2 flex-wrap';
 
         const cards = p.cards || [];
-        if (cards.length === 0) {
+        if (!gameState.gameStarted && cards.length === 0) {
           const hint = document.createElement('div');
           hint.className = 'small text-slate-400';
-          hint.textContent = gameState.gameStarted ? '尚未發到牌' : '等待遊戲開始';
-          cardContainer.appendChild(hint);
+          hint.textContent = '等待遊戲開始';
+          wrapper.appendChild(hint);
         }
-        cards.forEach((c,i)=>{
+
+        cards.forEach((c, idx) => {
           const cardEl = document.createElement('div');
           cardEl.className = 'card';
           const isMine = currentUser && p.id === currentUser.uid;
           const isMarked = (p.marked || []).includes(c);
+
           if (isMarked) cardEl.classList.add('marked');
+
           if (isMine) {
             cardEl.classList.add('card-face');
             cardEl.textContent = c;
             cardEl.style.cursor = 'pointer';
             cardEl.title = isMarked ? '已標記' : '點擊以標記';
             cardEl.onclick = () => markCard(p.id, c);
+            // color suits: if red suit then red
+            if (c[0] === '♥' || c[0] === '♦') cardEl.classList.add('suit-red');
+            else cardEl.classList.add('suit-black');
           } else {
-            // other player's view: show back except if marked (we show value when marked)
+            // other player's view: show back unless marked
             if (isMarked) {
               cardEl.classList.add('card-face');
               cardEl.textContent = c;
+              if (c[0] === '♥' || c[0] === '♦') cardEl.classList.add('suit-red');
+              else cardEl.classList.add('suit-black');
             } else {
               cardEl.classList.add('card-back');
               cardEl.textContent = ' ';
@@ -444,29 +470,16 @@
           cardsRow.appendChild(cardEl);
         });
 
-        cardContainer.appendChild(cardsRow);
-        playersArea.appendChild(cardContainer);
+        wrapper.appendChild(cardsRow);
+        playersArea.appendChild(wrapper);
       });
-
-      // show join/leave buttons appropriately
-      if (currentUser && Object.keys(cleanPlayers).some(p=>p.id === currentUser.uid)) {
-        btnJoin.classList.add('hidden');
-        btnLeave.classList.remove('hidden');
-      } else {
-        btnJoin.classList.remove('hidden');
-        btnLeave.classList.add('hidden');
-      }
     }
 
-    // ---------- startup ----------
-    (async function() {
-      await doAuth();
-      // subscribeRoom() will be triggered by auth state change handler
+    // ---------- Start ----------
+    (async function(){
+      await doAnonymousAuth();
     })();
 
   </script>
 </body>
 </html>
-
-
-
