@@ -1,343 +1,634 @@
 <!DOCTYPE html>
 <html lang="zh-TW">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>即時備忘錄 (已啟用匿名登入)</title>
-    <!-- 引入 Tailwind CSS CDN -->
-    <script src="https://cdn.tailwindcss.com"></script>
-    <style>
-        body {
-            font-family: 'Inter', sans-serif;
-            background-color: #f1f5f9;
-        }
-        .container-card {
-            max-width: 600px;
-            width: 100%;
-        }
-    </style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Pool Poker 撞球撲克</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/react@18/umd/react.development.js" crossorigin></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js" crossorigin></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
+    body { font-family: 'Inter', sans-serif; background-color: #1a202c; color: white; }
+    
+    /* Pool Ball Styles */
+    .ball {
+      box-shadow: inset -2px -2px 6px rgba(0,0,0,0.3), 2px 2px 5px rgba(0,0,0,0.3);
+    }
+    .stripe-ball {
+      background: white;
+      position: relative;
+      overflow: hidden;
+    }
+    .stripe-ball::before {
+      content: '';
+      position: absolute;
+      top: 20%;
+      bottom: 20%;
+      left: 0;
+      right: 0;
+      background: var(--stripe-color);
+    }
+    .stripe-text {
+      position: relative;
+      z-index: 10;
+      background: white;
+      border-radius: 50%;
+      width: 18px;
+      height: 18px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 10px;
+      font-weight: bold;
+      color: black;
+    }
+    /* 撲克牌樣式 */
+    .card-face {
+        font-size: 1.2rem;
+        text-shadow: 1px 1px 2px rgba(0,0,0,0.2);
+    }
+    .card-back {
+        background: linear-gradient(135deg, #10b981, #059669);
+        border: 2px solid #34d399;
+    }
+    /* 使標記的球在背景中閃爍 */
+    @keyframes pulse-marked {
+      0%, 100% { box-shadow: 0 0 0 0 rgba(251, 191, 36, 0.5); }
+      50% { box-shadow: 0 0 15px 5px rgba(251, 191, 36, 0.8); }
+    }
+    .marked-ball {
+        animation: pulse-marked 2s infinite ease-in-out;
+    }
+  </style>
 </head>
-<body class="p-4 md:p-8 min-h-screen flex flex-col items-center justify-center">
+<body>
+  <div id="root"></div>
 
-    <div id="app-container" class="container-card bg-white p-6 md:p-10 rounded-xl shadow-2xl space-y-6">
-        <h1 class="text-4xl font-extrabold text-gray-900 text-center border-b-4 border-indigo-500 pb-3 mb-6">
-            ✨ 即時備忘錄 (To-Do List)
-        </h1>
+  <!-- Firebase 初始化：使用 Canvas 環境注入的變數 -->
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+    import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+    import { getFirestore, doc, onSnapshot, setDoc, updateDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+    import { setLogLevel } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
-        <!-- 連線狀態顯示區塊 -->
-        <div id="status-box" class="p-3 rounded-lg shadow-inner text-sm transition duration-300 bg-yellow-100">
-            <p id="connection-message" class="font-bold text-gray-700">正在初始化連線...</p>
-            <p id="user-id-display" class="text-xs text-gray-500 break-all mt-1 hidden">使用者 ID (請提供給他人分享): </p>
-        </div>
-        
-        <!-- 輸入和新增備忘錄區塊 -->
-        <div id="input-area" class="flex space-x-3 pt-4 border-t border-gray-100 opacity-50 pointer-events-none transition duration-300">
-            <input type="text" id="new-todo-input" placeholder="新增一項備忘錄..." class="flex-grow p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none">
-            <button id="add-todo-btn" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-5 rounded-lg shadow-md transition duration-150 ease-in-out">
-                新增
-            </button>
-        </div>
+    // 1. 取得 Canvas 環境提供的全域變數
+    const firebaseConfig = JSON.parse(typeof __firebase_config !== 'undefined' ? __firebase_config : '{}');
+    const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
+    const appId = typeof __app_id !== 'undefined' ? __app_id : firebaseConfig.projectId; // 確保 appId 存在
 
-        <!-- 備忘錄列表區塊 -->
-        <div class="mt-8">
-            <h2 class="text-2xl font-semibold text-gray-800 mb-3">我的備忘錄清單 (公開列表)</h2>
-            <ul id="todo-list" class="space-y-3">
-                <li class="p-4 bg-gray-50 text-gray-500 rounded-lg border border-gray-200 text-center italic">
-                    連線成功後將會載入備忘錄...
-                </li>
-            </ul>
-        </div>
-    </div>
+    // 2. 根據 Firestore 安全規則設定公共資料路徑
+    // 路徑結構：/artifacts/{appId}/public/data/pool_poker_rooms/main_room
+    window.GAME_ROOM_PATH = `artifacts/${appId}/public/data/pool_poker_rooms/main_room`; 
 
-    <!-- Firebase SDK 和主要應用程式邏輯 -->
-    <script type="module">
-        // 1. Firebase 服務和工具導入
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { 
-            getFirestore, 
-            doc, 
-            addDoc, 
-            deleteDoc, 
-            collection, 
-            query, 
-            onSnapshot 
-        } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
-        import { setLogLevel } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
-
-        // 設置日誌級別為 Debug
-        setLogLevel('Debug');
-
-        // 3. 全域變量、配置和 DOM 元素
-        let db = null;
-        let auth = null;
-        let userId = null;
-        let isAuthReady = false;
-        
-        // Configuration variables (現在只在這裡宣告，在 initFirebase 中賦值)
-        let firebaseConfig = null;
-        let appId = null;
-        let initialAuthToken = null;
-
-        // DOM 元素快取
-        const connMessageEl = document.getElementById('connection-message');
-        const userIdDisplayEl = document.getElementById('user-id-display');
-        const statusBoxEl = document.getElementById('status-box');
-        const inputAreaEl = document.getElementById('input-area');
-        const inputEl = document.getElementById('new-todo-input');
-        const addBtn = document.getElementById('add-todo-btn');
-        const todoListEl = document.getElementById('todo-list');
-
-        
-        // 4. UI/狀態管理函數
-        
-        /**
-         * 更新連線狀態 UI
-         */
-        function updateStatus(msg, isSuccess) {
-            connMessageEl.textContent = msg;
-            statusBoxEl.classList.remove('bg-red-100', 'bg-green-100', 'bg-yellow-100');
-            
-            if (isSuccess) {
-                statusBoxEl.classList.add('bg-green-100');
-            } else if (msg.includes('錯誤') || msg.includes('失敗') || msg.includes('無法')) {
-                statusBoxEl.classList.add('bg-red-100');
-            } else {
-                statusBoxEl.classList.add('bg-yellow-100');
-            }
-            
-            if (isSuccess) {
-                inputAreaEl.classList.remove('opacity-50', 'pointer-events-none');
-            } else {
-                inputAreaEl.classList.add('opacity-50', 'pointer-events-none');
-            }
+    // 3. 初始化 Firebase
+    let app;
+    try {
+        if (Object.keys(firebaseConfig).length === 0) {
+            throw new Error("Firebase config not found.");
         }
+        app = initializeApp(firebaseConfig);
+    } catch (e) {
+        console.error("Firebase initialization failed:", e.message);
+        // 即使初始化失敗，也讓應用程式繼續，React 組件將顯示錯誤訊息
+    }
+    
+    if (app) {
+        // 4. 設置全域變數供 React 元件使用
+        window.auth = getAuth(app); 
+        window.db = getFirestore(app);
+        window.doc = doc;
+        window.onSnapshot = onSnapshot;
+        window.setDoc = setDoc;
+        window.updateDoc = updateDoc;
+        window.onAuthStateChanged = onAuthStateChanged; 
         
-        /** * 顯示使用者 ID 
-         */
-        function displayUserId() {
-            if (userId) {
-                userIdDisplayEl.textContent = `使用者 ID (請提供給他人分享): ${userId}`;
-                userIdDisplayEl.classList.remove('hidden');
+        setLogLevel('debug'); // 啟用 debug log
+        
+        // 5. 執行認證：優先使用自定義 Token，若無則使用匿名登入
+        (async () => {
+            try {
+                if (initialAuthToken) {
+                    await signInWithCustomToken(window.auth, initialAuthToken);
+                } else {
+                    await signInAnonymously(window.auth); 
+                }
+                console.log("Firebase Auth success.");
+            } catch (error) {
+                console.error("Firebase Auth Failed:", error);
             }
+        })();
+    } else {
+        // 設置空對象以防止 React 腳本中引用 'window.auth' 等變數時拋出錯誤
+        window.auth = {};
+        window.db = {};
+        window.onAuthStateChanged = (auth, callback) => callback(null);
+    }
+  </script>
+
+  <!-- React 應用程式 - type="text/babel" -->
+  <script type="text/babel">
+    // 從 window 解構 Firebase 函數和變數
+    const { 
+        auth, db, doc, onSnapshot, setDoc, updateDoc, 
+        onAuthStateChanged, GAME_ROOM_PATH 
+    } = window;
+    
+    // --- POKER HAND EVALUATION LOGIC 撲克牌型評估邏輯 ---
+
+    /**
+     * 將卡片數字轉換為撲克牌顯示值 (1=A, 11=J, 12=Q, 13=K)
+     */
+    const getCardValueDisplay = (num) => {
+        if (num === 1) return 'A';
+        if (num === 11) return 'J';
+        if (num === 12) return 'Q';
+        if (num === 13) return 'K';
+        return String(num);
+    };
+
+    /**
+     * 評估 5 張牌的手牌價值 (無花色/Suit)
+     * @param {number[]} cards - 5 張 1-13 之間的數字牌
+     * @returns {string} 牌型名稱
+     */
+    const evaluateHand = (cards) => {
+        if (!cards || cards.length !== 5) return '無牌';
+        
+        // 1. 排序卡片並計算次數 (Rank Frequencies)
+        const ranks = cards.slice().sort((a, b) => a - b); 
+        const counts = {};
+        for (const rank of ranks) {
+            counts[rank] = (counts[rank] || 0) + 1;
+        }
+        const countValues = Object.values(counts); // e.g., [1, 2, 2] for Two Pair
+        
+        // 2. 檢查順子 (Straight)
+        const isStraight = (arr) => {
+            const sortedUniqueRanks = [...new Set(arr)].sort((a, b) => a - b);
+            
+            // 需要 5 張不同的牌才能構成順子
+            if (sortedUniqueRanks.length < 5) return false;
+
+            // 處理 A-5 (1, 2, 3, 4, 5) 順子 (Ace low)
+            const isAlowStraight = sortedUniqueRanks.join(',') === '1,2,3,4,5';
+
+            // 處理 K-A (10, 11, 12, 13, 1) 順子 (Ace high)
+            const isAhighStraight = sortedUniqueRanks.join(',') === '1,10,11,12,13'; 
+            
+            // 處理一般順子 (連續 5 張)
+            const isRegularStraight = sortedUniqueRanks[4] - sortedUniqueRanks[0] === 4;
+            
+            return isAlowStraight || isAhighStraight || isRegularStraight;
+        };
+
+        const straight = isStraight(ranks);
+        
+        // 3. 檢查牌型 (從高到低)
+        if (countValues.includes(4)) return '四條 (Four of a Kind)';
+        if (countValues.includes(3) && countValues.includes(2)) return '葫蘆 (Full House)';
+        
+        // 在無花色的規則下，順子排名在葫蘆和三條之間
+        if (straight) return '順子 (Straight)'; 
+
+        if (countValues.includes(3)) return '三條 (Three of a Kind)';
+        
+        const pairs = countValues.filter(v => v === 2).length;
+        if (pairs === 2) return '兩對 (Two Pair)';
+        if (pairs === 1) return '一對 (Pair)';
+        
+        // 4. 最後是高牌 (High Card)
+        return '高牌 (High Card)';
+    };
+
+
+    const App = () => {
+      const [user, setUser] = React.useState(null);
+      const [gameState, setGameState] = React.useState(null);
+      const [nickname, setNickname] = React.useState('');
+      const [loading, setLoading] = React.useState(true);
+      const [errorMsg, setErrorMsg] = React.useState('');
+
+      // --- Authentication & Data Sync ---
+      React.useEffect(() => {
+        // 檢查 Firebase 服務是否可用
+        if (!auth || !db) {
+            setErrorMsg("Firebase 服務未正確初始化。請檢查瀏覽器 Console。");
+            setLoading(false);
+            return;
         }
 
-        // 5. Firestore 數據操作函數
+        const unsubscribeAuth = onAuthStateChanged(auth, (currentUser) => {
+          setUser(currentUser);
+          setLoading(false);
+        }, (error) => {
+            console.error("Auth Error:", error);
+            setErrorMsg("身份驗證失敗，請檢查瀏覽器設定或 Firebase 設定。");
+            setLoading(false);
+        });
+        return () => unsubscribeAuth();
+      }, []);
+
+      // --- Firestore Listener ---
+      React.useEffect(() => {
+        // 確保 user 已經被設置且 loading 結束，且 db 服務可用
+        if (!user || loading || !db) return; 
+
+        const gameDocRef = doc(db, GAME_ROOM_PATH);
+
+        const unsubscribe = onSnapshot(gameDocRef, (docSnap) => {
+          if (docSnap.exists()) {
+            setGameState(docSnap.data());
+          } else {
+            setGameState(null); // Room doesn't exist yet
+          }
+          if(errorMsg.includes("連線錯誤")) setErrorMsg(""); // 清除連線錯誤訊息
+        }, (error) => {
+          console.error("Snapshot error:", error);
+          setErrorMsg("連線錯誤：無法讀取遊戲狀態。請檢查 Firebase Console 上的錯誤資訊。");
+          setLoading(false); 
+        });
+
+        return () => unsubscribe();
+      }, [user, loading, db]); // 依賴於 user 和 db 狀態
+
+      // --- Game Actions ---
+
+      const handleJoin = async () => {
+        if (!nickname.trim()) {
+          setErrorMsg("請輸入暱稱");
+          return;
+        }
+
+        const gameDocRef = doc(db, GAME_ROOM_PATH);
+        const myId = user.uid;
         
-        /**
-         * 處理新增備忘錄
-         */
-        async function handleAddTodo() {
-            const text = inputEl.value.trim();
-            if (!text || !db || !userId) return;
+        try {
+          if (!gameState) {
+            // Create new game (總共 52 張牌，每張牌有 4 個複本)
+            await setDoc(gameDocRef, {
+              creatorId: myId,
+              gameStarted: false,
+              cardsPerPlayer: 5,
+              players: {
+                [myId]: {
+                  id: myId,
+                  nickname: nickname.trim(),
+                  cards: [], // 牌面數值 (1-13)
+                  marked: [] // 已擊落的球數值 (1-13)
+                }
+              },
+              lastUpdated: new Date().toISOString()
+            });
+          } else {
+            // Join existing
+            if (Object.keys(gameState.players || {}).length >= 5) {
+              setErrorMsg("房間已滿 (上限 5 人)！");
+              return;
+            }
+            
+            // 避免重複加入
+            if(gameState.players[myId]) {
+                 setErrorMsg("您已在房間內，無需重複加入。");
+                 return;
+            }
 
-            // 公開資料路徑: /artifacts/{appId}/public/data/todos
-            const collectionPath = collection(db, 'artifacts', appId, 'public', 'data', 'todos');
-
-            const newTodo = {
-                text: text,
-                timestamp: Date.now(),
-                userId: userId, 
-                completed: false
+            const updatedPlayers = {
+              ...gameState.players,
+              [myId]: {
+                id: myId,
+                nickname: nickname.trim(),
+                cards: [],
+                marked: []
+              }
             };
 
-            try {
-                await addDoc(collectionPath, newTodo);
-                inputEl.value = ''; // 清空輸入框
-            } catch (error) {
-                console.error("Error adding document: ", error);
-                updateStatus(`❌ 新增備忘錄失敗: ${error.message}`, false);
-            }
+            await updateDoc(gameDocRef, { players: updatedPlayers });
+          }
+          setErrorMsg("");
+        } catch (e) {
+          console.error("Join failed:", e);
+          setErrorMsg("加入遊戲失敗，可能是權限不足。請檢查 Firebase Console 上的錯誤資訊。");
+        }
+      };
+
+      const handleStartGame = async () => {
+        if (!gameState) return;
+        if (gameState.creatorId !== user.uid) {
+            setErrorMsg("只有房主可以發牌！");
+            return;
         }
         
-        /**
-         * 處理刪除備忘錄
-         */
-        async function handleDeleteTodo(docId) {
-            if (!db) return;
+        const playerIds = Object.keys(gameState.players);
+        if (playerIds.length === 0) return;
 
-            // 確保路徑與新增時一致
-            const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'todos', docId);
+        // 建立 1-13 號球，每號 4 張 (模擬 4 副花色)
+        let deck = [];
+        for (let i = 1; i <= 13; i++) {
+          deck.push(i, i, i, i);
+        }
+        deck = deck.sort(() => Math.random() - 0.5); // 洗牌
 
-            try {
-                await deleteDoc(docRef);
-            } catch (error) {
-                console.error("Error deleting document: ", error);
-                updateStatus(`❌ 刪除備忘錄失敗: ${error.message}`, false);
-            }
+        const newPlayers = { ...gameState.players };
+        const cardsPerPlayer = gameState.cardsPerPlayer || 5;
+
+        // 發牌
+        playerIds.forEach((pid, index) => {
+          newPlayers[pid] = {
+            ...newPlayers[pid],
+            // 發牌並從牌堆中移除已發的牌
+            cards: deck.splice(0, cardsPerPlayer), 
+            marked: []
+          };
+        });
+
+        const gameDocRef = doc(db, GAME_ROOM_PATH);
+        await updateDoc(gameDocRef, {
+          players: newPlayers,
+          gameStarted: true,
+          notice: `遊戲開始！房主發了 ${cardsPerPlayer} 張牌。`
+        });
+      };
+
+      const handleRestart = async () => {
+        if (!gameState) return;
+        if (gameState.creatorId !== user.uid) {
+            setErrorMsg("只有房主可以重開！");
+            return;
         }
 
-        /**
-         * 渲染備忘錄列表
-         */
-        function renderTodos(todos) {
-            if (todos.length === 0) {
-                todoListEl.innerHTML = `
-                    <li class="p-4 bg-gray-50 text-gray-500 rounded-lg border border-gray-200 text-center italic">
-                        目前沒有備忘錄，新增一個吧！
-                    </li>
-                `;
-                return;
-            }
+        const emptyPlayers = {};
+        Object.keys(gameState.players).forEach(pid => {
+          emptyPlayers[pid] = {
+            ...gameState.players[pid],
+            cards: [],
+            marked: []
+          };
+        });
 
-            // 根據時間戳降序排序 (最新的在最上面)
-            todos.sort((a, b) => b.timestamp - a.timestamp);
+        const gameDocRef = doc(db, GAME_ROOM_PATH);
+        await updateDoc(gameDocRef, {
+          players: emptyPlayers,
+          gameStarted: false,
+          notice: '遊戲已重開，請等待房主重新發牌。'
+        });
+      };
 
-            todoListEl.innerHTML = '';
+      const handleMarkNumber = async (num) => {
+        if (!gameState?.gameStarted) {
+            setErrorMsg("遊戲尚未開始。");
+            return;
+        }
+        
+        const myId = user.uid;
+        const myData = gameState.players[myId];
+        if (!myData) return; 
+        
+        // 檢查是否已標記
+        if (myData.marked.includes(num)) return; 
+
+        const newMarked = [...myData.marked, num];
+        const gameDocRef = doc(db, GAME_ROOM_PATH);
+        
+        await updateDoc(gameDocRef, {
+          [`players.${myId}.marked`]: newMarked,
+          notice: `${myData.nickname} 標記了 ${num} 號球已入袋。`
+        });
+      };
+
+      // --- Helper: Ball Colors ---
+
+      const getBallStyle = (num) => {
+        const colors = {
+          1: 'yellow', 2: 'blue', 3: 'red', 4: 'purple', 5: 'orange', 6: 'green', 7: 'brown', 8: 'black',
+          9: 'yellow', 10: 'blue', 11: 'red', 12: 'purple', 13: 'orange'
+        };
+        const color = colors[num] || 'gray';
+        const isStripe = num > 8;
+        
+        return { color, isStripe };
+      };
+
+      // --- Render Components ---
+
+      if (loading || !user) {
+          return (
+            <div className="h-screen flex flex-col items-center justify-center p-4 bg-slate-900">
+                {errorMsg && (
+                    <div className="bg-red-500/20 text-red-300 p-4 rounded mb-4 text-center max-w-sm">
+                        連線發生致命錯誤：{errorMsg}
+                        <div className="text-xs mt-2 text-red-400">請確認您的 Firebase 連線狀態。</div>
+                    </div>
+                )}
+                <div className="text-emerald-400 text-lg">正在連接 Firebase...</div>
+            </div>
+          );
+      }
+
+      const isJoined = gameState && gameState.players && gameState.players[user.uid];
+
+      if (!isJoined) {
+        return (
+          <div className="min-h-screen bg-slate-900 flex items-center justify-center p-4">
+            <div className="bg-slate-800 p-8 rounded-2xl shadow-2xl max-w-md w-full border border-slate-700">
+              <h1 className="text-3xl font-bold text-emerald-400 mb-6 text-center flex items-center justify-center gap-2">
+                🎱 Pool Poker 撞球撲克
+              </h1>
+              <p className="text-slate-400 text-sm mb-6 text-center">
+                User ID: <span className="text-xs font-mono text-slate-300">{user.uid}</span>
+              </p>
+              {errorMsg && <div className="bg-red-500/20 text-red-300 p-3 rounded mb-4 text-sm text-center">{errorMsg}</div>}
+              
+              <div className="space-y-4">
+                <div>
+                  <label htmlFor="nickname" className="block text-slate-400 text-sm mb-1">暱稱</label>
+                  <input 
+                    id="nickname"
+                    type="text" 
+                    value={nickname}
+                    onChange={(e) => setNickname(e.target.value)}
+                    className="w-full bg-slate-900 border border-slate-700 rounded p-3 text-white focus:outline-none focus:border-emerald-500 transition"
+                    placeholder="輸入您的暱稱"
+                  />
+                </div>
+                <button 
+                  onClick={handleJoin}
+                  className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-3 rounded transition shadow-lg shadow-emerald-900/50"
+                >
+                  {gameState ? "加入現有遊戲" : "建立新房間"}
+                </button>
+              </div>
+              
+              <div className="mt-6 text-xs text-slate-500 text-center">
+                {gameState ? 
+                  `${Object.keys(gameState.players || {}).length} 位玩家已在等候` : 
+                  "成為第一個開桌的人！"
+                }
+              </div>
+            </div>
+          </div>
+        );
+      }
+
+      // GAME BOARD
+      const isCreator = gameState.creatorId === user.uid;
+
+      return (
+        <div className="min-h-screen bg-emerald-900 flex flex-col">
+          {/* Header */}
+          <div className="bg-emerald-950/80 p-4 shadow-md backdrop-blur-sm border-b border-emerald-800 flex flex-col sm:flex-row justify-between items-center sticky top-0 z-50">
+             <div className="flex items-center gap-2 mb-2 sm:mb-0">
+               <span className="text-2xl">🎱</span>
+               <h1 className="font-bold text-white text-lg sm:text-xl">Pool Poker (撞球撲克)</h1>
+             </div>
+             
+             <div className="flex gap-2 text-sm">
+               {isCreator && !gameState.gameStarted && Object.keys(gameState.players).length > 0 && (
+                 <button onClick={handleStartGame} className="bg-yellow-600 hover:bg-yellow-500 text-white px-4 py-2 rounded font-bold shadow-lg transition duration-200">
+                   發牌開始遊戲
+                 </button>
+               )}
+               {isCreator && (
+                 <button onClick={handleRestart} className="bg-slate-700 hover:bg-slate-600 text-white px-4 py-2 rounded shadow-lg transition duration-200">
+                   重開一局
+                 </button>
+               )}
+             </div>
+          </div>
+
+          {/* Main Content */}
+          <div className="flex-1 p-4 max-w-6xl mx-auto w-full flex flex-col gap-6">
             
-            todos.forEach(todo => {
-                // 檢查 userId 是否存在以避免錯誤
-                const displayUserId = todo.userId || '未知使用者';
-                const isMyTodo = todo.userId === userId;
-                const borderClass = isMyTodo ? 'border-indigo-600' : 'border-gray-400';
+            {/* Notification Area */}
+            <div className={`p-3 rounded shadow-lg text-center text-sm transition-all duration-300 ${
+                errorMsg 
+                ? 'bg-red-500/90 text-white animate-pulse' 
+                : gameState.notice 
+                  ? 'bg-blue-500/20 text-blue-300' 
+                  : 'bg-transparent'
+            }`}>
+              {errorMsg || gameState.notice || (gameState.gameStarted ? '遊戲進行中' : '等待中...')}
+            </div>
+
+            {/* Ball Selection Area (模擬球桌) */}
+            {gameState.gameStarted && (
+              <div className="bg-emerald-950/40 p-6 rounded-3xl border-[12px] border-amber-900 shadow-2xl relative">
+                {/* Pockets visual (裝飾用) */}
+                <div className="absolute top-0 left-0 w-8 h-8 bg-black rounded-br-full z-10"></div>
+                <div className="absolute top-0 right-0 w-8 h-8 bg-black rounded-bl-full z-10"></div>
+                <div className="absolute bottom-0 left-0 w-8 h-8 bg-black rounded-tr-full z-10"></div>
+                <div className="absolute bottom-0 right-0 w-8 h-8 bg-black rounded-tl-full z-10"></div>
                 
-                const li = document.createElement('li');
-                li.className = `flex items-center justify-between p-4 bg-white rounded-xl shadow-md transition duration-200 hover:shadow-lg border-l-4 ${borderClass}`;
-                li.innerHTML = `
-                    <div class="flex flex-col">
-                        <span class="text-gray-800 text-lg">${todo.text}</span>
-                        <span class="text-xs text-gray-400 mt-1">
-                            由 ${isMyTodo ? '您' : displayUserId.substring(0, 8) + '...'} 新增
+                <h2 className="text-center text-emerald-200/50 text-sm mb-4 font-mono uppercase tracking-widest">點擊以標記擊落的目標球 (1-13)</h2>
+                
+                <div className="flex flex-wrap justify-center gap-3 sm:gap-4">
+                  {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13].map((num) => {
+                    const { color, isStripe } = getBallStyle(num);
+                    const isMarked = gameState.players[user.uid]?.marked.includes(num);
+                    
+                    return (
+                      <button
+                        key={num}
+                        onClick={() => handleMarkNumber(num)}
+                        disabled={isMarked}
+                        title={isMarked ? `已標記 ${num} 號球` : `點擊標記 ${num} 號球`}
+                        className={`
+                          w-12 h-12 sm:w-14 sm:h-14 rounded-full flex items-center justify-center font-bold text-sm shadow-xl transition-transform active:scale-95
+                          ${isMarked ? 'opacity-30 grayscale cursor-not-allowed scale-90 marked-ball' : 'hover:scale-110'}
+                          ${isStripe ? 'stripe-ball' : 'ball'}
+                        `}
+                        style={{
+                          backgroundColor: isStripe ? 'white' : color,
+                          '--stripe-color': color,
+                          color: isStripe ? 'black' : (num === 8 ? 'white' : 'white')
+                        }}
+                      >
+                          <span className={isStripe ? 'stripe-text' : ''}>{num}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* Players Hands */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {Object.values(gameState.players).sort((a,b) => a.id === user.uid ? -1 : 1).map((player) => {
+                const isMe = player.id === user.uid;
+                const handValue = gameState.gameStarted && player.cards?.length === 5 ? evaluateHand(player.cards) : null;
+                
+                return (
+                  <div key={player.id} className={`
+                    relative p-4 rounded-xl border-2 transition-all duration-300
+                    ${isMe ? 'bg-emerald-800 border-yellow-400 shadow-xl scale-[1.02]' : 'bg-emerald-900/60 border-emerald-800'}
+                  `}>
+                    <div className="flex justify-between items-center mb-3">
+                      <div className="flex items-center gap-2">
+                        <div className={`w-3 h-3 rounded-full ${isMe ? 'bg-green-400' : 'bg-slate-500'}`}></div>
+                        <span className={`font-bold ${isMe ? 'text-white' : 'text-emerald-200'}`}>
+                          {player.nickname} {isMe && '(您)'}
+                        </span>
+                      </div>
+                      <span className="text-xs text-emerald-400 font-mono">
+                        已擊落 {player.marked?.length || 0} 個目標
+                      </span>
+                    </div>
+
+                    <div className="flex flex-wrap gap-2 min-h-[60px]">
+                      {gameState.gameStarted && player.cards && player.cards.map((card, idx) => {
+                        const isMarked = player.marked.includes(card);
+                        const isVisible = isMe || isMarked;
+                        
+                        return (
+                          <div 
+                            key={`${player.id}-${idx}`}
+                            className={`
+                              w-10 h-14 sm:w-12 sm:h-16 rounded flex items-center justify-center text-lg font-bold shadow-md transition-all duration-500
+                              ${!isVisible 
+                                ? 'card-back text-transparent' // 卡背
+                                : isMarked 
+                                  ? 'bg-yellow-400 text-black border-2 border-yellow-200 scale-105 shadow-yellow-500/50 card-face' // 標記牌
+                                  : 'bg-white text-slate-800 card-face' // 亮牌
+                              }
+                            `}
+                            title={isMarked ? `擊落了 ${getCardValueDisplay(card)}!` : (isVisible ? getCardValueDisplay(card) : '未擊落')}
+                          >
+                              {isVisible ? getCardValueDisplay(card) : ''}
+                          </div>
+                        );
+                      })}
+                      
+                      {/* 遊戲未開始或無牌時的訊息 */}
+                      {gameState.gameStarted && (!player.cards || player.cards.length === 0) && (
+                        <div className="text-sm text-emerald-500 italic w-full text-center py-2">尚未發牌 (請房主開始遊戲)</div>
+                      )}
+                      
+                      {!gameState.gameStarted && (
+                        <div className="text-sm text-emerald-500 italic w-full text-center py-2">等待中...</div>
+                      )}
+                    </div>
+
+                    {/* 牌型顯示 */}
+                    <div className="text-xs text-slate-400 mt-3 pt-3 border-t border-emerald-700">
+                        <span className="font-semibold text-emerald-300">牌型: </span>
+                        <span className={`font-bold ${handValue ? 'text-yellow-300' : 'text-slate-500'}`}>
+                            {handValue || '等待發牌'}
                         </span>
                     </div>
-                    ${isMyTodo ? `
-                        <button data-id="${todo.id}" class="delete-btn text-red-500 hover:text-red-700 p-1 rounded-full transition duration-150">
-                            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
-                        </button>
-                    ` : ''}
-                `;
-                todoListEl.appendChild(li);
-            });
-            
-            // 為新渲染的按鈕添加事件監聽器
-            todoListEl.querySelectorAll('.delete-btn').forEach(button => {
-                button.onclick = (e) => handleDeleteTodo(e.currentTarget.dataset.id);
-            });
-        }
-        
-        /**
-         * 設置 Firestore 數據監聽器 (onSnapshot)
-         */
-        function setupDataListener() {
-            // 只有當身份驗證成功後才執行
-            if (!isAuthReady || !db || !userId) return;
 
-            updateStatus('🟢 身份驗證成功，正在同步資料...', false);
+                  </div>
+                );
+              })}
+            </div>
 
-            // 公開資料路徑: /artifacts/{appId}/public/data/todos
-            const collectionPath = collection(db, 'artifacts', appId, 'public', 'data', 'todos');
-            const q = query(collectionPath);
-            
-            // 使用 onSnapshot 進行即時監聽
-            const unsubscribe = onSnapshot(q, (snapshot) => {
-                const todos = [];
-                snapshot.forEach((doc) => {
-                    todos.push({ id: doc.id, ...doc.data() });
-                });
-                
-                renderTodos(todos);
-                updateStatus('✅ 連線成功 & 資料即時同步中', true);
-            }, (error) => {
-                console.error("Firestore Listener Error: ", error);
-                updateStatus(`❌ 資料同步失敗: ${error.message}`, false);
-            });
+          </div>
+        </div>
+      );
+    };
 
-            // 為了簡潔，這裡不處理 unsubscribe
-        }
-
-
-        // 6. Firebase 初始化和身份驗證流程
-        async function initFirebase() {
-            // === 配置解析和檢查 (強制使用注入變數) ===
-            try {
-                // 優先從 Canvas 環境獲取配置
-                if (typeof __firebase_config === 'string') {
-                    firebaseConfig = JSON.parse(__firebase_config);
-                } else {
-                    // 如果 Canvas 配置不存在，顯示錯誤並停止執行
-                    console.error("❌ 嚴重錯誤：Canvas 環境變數 '__firebase_config' 遺失或無效。應用程式無法正確初始化。");
-                    document.getElementById('connection-message').textContent = '❌ 應用程式配置遺失，無法初始化 Firebase。';
-                    return; 
-                }
-
-                // 獲取 App ID (路徑用)
-                appId = typeof __app_id === 'string' ? __app_id : firebaseConfig.projectId || 'default-todo-app';
-                
-                // 獲取自訂認證 Token
-                initialAuthToken = typeof __initial_auth_token === 'string' ? __initial_auth_token : null;
-
-            } catch (e) {
-                console.error("配置解析失敗，請檢查 __firebase_config 變數。", e);
-                // 停止執行
-                document.getElementById('connection-message').textContent = '❌ 應用程式配置錯誤，無法初始化 Firebase。';
-                return; 
-            }
-            // === 結束配置解析和檢查 ===
-
-            try {
-                // 初始化 Firebase
-                const app = initializeApp(firebaseConfig);
-                db = getFirestore(app);
-                auth = getAuth(app);
-                
-                updateStatus('🟡 正在嘗試身份驗證...', false);
-
-                // 處理身份驗證：優先使用注入的 Custom Token，否則使用匿名登入
-                if (initialAuthToken) {
-                    // 嘗試使用自訂 Token 登入
-                    await signInWithCustomToken(auth, initialAuthToken);
-                } else {
-                    // 如果沒有 Token (或 Token 無效)，使用匿名登入
-                    await signInAnonymously(auth);
-                }
-
-                // 設置身份驗證狀態監聽器
-                onAuthStateChanged(auth, (user) => {
-                    if (user) {
-                        userId = user.uid;
-                        isAuthReady = true;
-                        displayUserId();
-                        
-                        // 設置數據監聽器 (只有在成功登入後才開始)
-                        setupDataListener();
-                    } else {
-                        if (isAuthReady) {
-                            updateStatus('❌ 身份驗證狀態變更: 使用者已登出', false);
-                        }
-                        userId = null;
-                        isAuthReady = false;
-                    }
-                });
-                
-                // 設置事件監聽器
-                addBtn.onclick = handleAddTodo;
-                inputEl.addEventListener('keypress', (e) => {
-                    if (e.key === 'Enter') {
-                        handleAddTodo();
-                    }
-                });
-
-            } catch (error) {
-                // 捕獲並顯示初始化或身份驗證錯誤
-                console.error("🔥 致命錯誤：Firebase 身份驗證失敗！", error);
-                
-                let errorMessage = `連線失敗。代碼: ${error.code || '未知'}`;
-                
-                if (error.code === 'auth/network-request-failed') {
-                    errorMessage = '無法連線到 Firebase 服務。請檢查您的網路連線。';
-                } else if (error.code === 'auth/operation-not-allowed') {
-                    // 如果啟用匿名登入後仍出現此錯誤，可能原因為其他權限問題
-                    errorMessage = '驗證方法未啟用或有其他權限問題。';
-                } else if (error.code) {
-                    errorMessage = `驗證失敗：${error.code}`;
-                }
-
-                updateStatus(`❌ ${errorMessage} (詳情請看 Console)`, false);
-            }
-        }
-
-        // 7. 啟動應用程式
-        window.onload = initFirebase;
-    </script>
+    const root = ReactDOM.createRoot(document.getElementById('root'));
+    root.render(<App />);
+  </script>
 </body>
 </html>
