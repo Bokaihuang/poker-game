@@ -40,7 +40,7 @@
 
         <!-- 備忘錄列表區塊 -->
         <div class="mt-8">
-            <h2 class="text-2xl font-semibold text-gray-800 mb-3">我的備忘錄清單</h2>
+            <h2 class="text-2xl font-semibold text-gray-800 mb-3">我的備忘錄清單 (公開列表)</h2>
             <ul id="todo-list" class="space-y-3">
                 <!-- 備忘錄將會在這裡即時顯示 -->
                 <li class="p-4 bg-gray-50 text-gray-500 rounded-lg border border-gray-200 text-center italic">
@@ -72,8 +72,9 @@
         // 2. 外部環境運行時的 Firebase 配置 (***重要***)
         
         // !!! 步驟 1: 如果在 Canvas 以外運行，請替換以下佔位符 !!!
+        // 請確保您從 Firebase Console 複製的物件是完整的，並且值被雙引號包圍。
         const YOUR_FIREBASE_CONFIG = {
-            apiKey: "AIzaSyCk54DEp6rzvpfQBBNW_iJByZ3boyHEPF0", // <-- 必須替換
+            apiKey: "AIzaSyCk54DEp6rzvpfQBBNW_iJByZ3boyHEPF0", // <-- 必須替換 (例如: "AIzaSyC...")
             authDomain: "poolpokergame-b88ed.firebaseapp.com",
             projectId: "poolpokergame-b88ed", // <-- 必須替換
             storageBucket: "poolpokergame-b88ed.appspot.com",
@@ -108,18 +109,23 @@
         const addBtn = document.getElementById('add-todo-btn');
         const todoListEl = document.getElementById('todo-list');
 
+        // 4. 配置驗證 (新增的防呆機制)
+        function validateConfig(config) {
+            if (config.apiKey.includes('YOUR_API_KEY') || config.projectId.includes('YOUR_PROJECT_ID')) {
+                return false;
+            }
+            return true;
+        }
 
-        // 4. UI/狀態管理函數
+        // 5. UI/狀態管理函數
         
         /**
          * 更新連線狀態 UI
-         * @param {string} msg 顯示的訊息
-         * @param {boolean} isSuccess 是否為成功狀態
          */
         function updateStatus(msg, isSuccess) {
             connMessageEl.textContent = msg;
             statusBoxEl.classList.remove('bg-red-100', 'bg-green-100', 'bg-yellow-100');
-            statusBoxEl.classList.add(isSuccess ? 'bg-green-100' : (msg.includes('錯誤') ? 'bg-red-100' : 'bg-yellow-100'));
+            statusBoxEl.classList.add(isSuccess ? 'bg-green-100' : (msg.includes('錯誤') || msg.includes('失敗') ? 'bg-red-100' : 'bg-yellow-100'));
             
             if (isSuccess) {
                 inputAreaEl.classList.remove('opacity-50', 'pointer-events-none');
@@ -137,7 +143,7 @@
             }
         }
 
-        // 5. Firestore 數據操作函數
+        // 6. Firestore 數據操作函數
         
         /**
          * 處理新增備忘錄
@@ -167,7 +173,6 @@
         
         /**
          * 處理刪除備忘錄
-         * @param {string} docId 文件 ID
          */
         async function handleDeleteTodo(docId) {
             if (!db) return;
@@ -185,7 +190,6 @@
 
         /**
          * 渲染備忘錄列表
-         * @param {Array<Object>} todos 備忘錄物件陣列
          */
         function renderTodos(todos) {
             if (todos.length === 0) {
@@ -224,7 +228,6 @@
          * 設置 Firestore 數據監聽器 (onSnapshot)
          */
         function setupDataListener() {
-            // 在身份驗證就緒後才設置監聽器
             if (!isAuthReady || !db || !userId) return;
 
             updateStatus('🟢 正在同步資料...', false);
@@ -249,11 +252,11 @@
         }
 
 
-        // 6. Firebase 初始化和身份驗證流程
+        // 7. Firebase 初始化和身份驗證流程
         async function initFirebase() {
-            // 檢查配置是否為佔位符
-            if (!isInCanvas && firebaseConfig.apiKey === "YOUR_API_KEY") {
-                updateStatus('❌ 錯誤: 請將程式碼中的 YOUR_FIREBASE_CONFIG 替換為您的實際 API Key 和 Project ID。', false);
+            // 優先檢查外部配置是否為佔位符
+            if (!isInCanvas && !validateConfig(firebaseConfig)) {
+                updateStatus('❌ 配置錯誤：請將程式碼中的 YOUR_FIREBASE_CONFIG 替換為您的實際 Firebase 專案資訊！', false);
                 return;
             }
 
@@ -298,12 +301,13 @@
                 });
 
             } catch (error) {
+                // 捕獲並顯示初始化錯誤 (包括 auth/configuration-not-found)
                 console.error("Firebase Initialization/Authentication Error:", error);
                 updateStatus(`❌ 連線失敗: ${error.message}`, false);
             }
         }
 
-        // 7. 啟動應用程式
+        // 8. 啟動應用程式
         window.onload = initFirebase;
     </script>
 </body>
