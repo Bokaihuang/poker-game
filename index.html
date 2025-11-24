@@ -1,10 +1,9 @@
-
 <!DOCTYPE html>
 <html lang="zh-TW">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>即時備忘錄 (配置更新版)</title>
+    <title>即時備忘錄 (已啟用匿名登入)</title>
     <!-- 引入 Tailwind CSS CDN -->
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
@@ -68,22 +67,6 @@
 
         // 設置日誌級別為 Debug
         setLogLevel('Debug');
-
-        // =================================================================================
-        // 🚨 僅用於開發時的備用配置（已根據您的最新資訊更新）
-        // 如果 Canvas 自動注入失敗，會使用此配置。
-        // =================================================================================
-        const FALLBACK_FIREBASE_CONFIG = {
-            apiKey: "AIzaSyCk54DEp6rzvpfQBBNW_iJByZ3boyHEPF0", 
-            authDomain: "poolpokergame-b88ed.firebaseapp.com",
-            databaseURL: "https://poolpokergame-b88ed-default-rtdb.asia-southeast1.firebasedatabase.app",
-            projectId: "poolpokergame-b88ed", 
-            storageBucket: "poolpokergame-b88ed.firebasestorage.app",
-            messagingSenderId: "574863840102",
-            appId: "1:574863840102:web:14368aaf84b3640c6eeea7"
-        };
-        // =================================================================================
-
 
         // 3. 全域變量、配置和 DOM 元素
         let db = null;
@@ -203,6 +186,8 @@
             todoListEl.innerHTML = '';
             
             todos.forEach(todo => {
+                // 檢查 userId 是否存在以避免錯誤
+                const displayUserId = todo.userId || '未知使用者';
                 const isMyTodo = todo.userId === userId;
                 const borderClass = isMyTodo ? 'border-indigo-600' : 'border-gray-400';
                 
@@ -212,7 +197,7 @@
                     <div class="flex flex-col">
                         <span class="text-gray-800 text-lg">${todo.text}</span>
                         <span class="text-xs text-gray-400 mt-1">
-                            由 ${isMyTodo ? '您' : todo.userId.substring(0, 8) + '...'} 新增
+                            由 ${isMyTodo ? '您' : displayUserId.substring(0, 8) + '...'} 新增
                         </span>
                     </div>
                     ${isMyTodo ? `
@@ -234,6 +219,7 @@
          * 設置 Firestore 數據監聽器 (onSnapshot)
          */
         function setupDataListener() {
+            // 只有當身份驗證成功後才執行
             if (!isAuthReady || !db || !userId) return;
 
             updateStatus('🟢 身份驗證成功，正在同步資料...', false);
@@ -262,15 +248,16 @@
 
         // 6. Firebase 初始化和身份驗證流程
         async function initFirebase() {
-            // === 配置解析和檢查，現在放在函數內部，使 return 合法 ===
+            // === 配置解析和檢查 (強制使用注入變數) ===
             try {
                 // 優先從 Canvas 環境獲取配置
                 if (typeof __firebase_config === 'string') {
                     firebaseConfig = JSON.parse(__firebase_config);
                 } else {
-                    // 如果 Canvas 配置不存在，使用備用配置
-                    firebaseConfig = FALLBACK_FIREBASE_CONFIG;
-                    console.warn("⚠️ 注意：未使用 Canvas 自動注入的 Firebase 配置，改用硬編碼的備用配置。在生產環境中可能會失敗。");
+                    // 如果 Canvas 配置不存在，顯示錯誤並停止執行
+                    console.error("❌ 嚴重錯誤：Canvas 環境變數 '__firebase_config' 遺失或無效。應用程式無法正確初始化。");
+                    document.getElementById('connection-message').textContent = '❌ 應用程式配置遺失，無法初始化 Firebase。';
+                    return; 
                 }
 
                 // 獲取 App ID (路徑用)
@@ -281,7 +268,7 @@
 
             } catch (e) {
                 console.error("配置解析失敗，請檢查 __firebase_config 變數。", e);
-                // 停止執行 (現在合法)
+                // 停止執行
                 document.getElementById('connection-message').textContent = '❌ 應用程式配置錯誤，無法初始化 Firebase。';
                 return; 
             }
@@ -295,12 +282,12 @@
                 
                 updateStatus('🟡 正在嘗試身份驗證...', false);
 
-                // 處理身份驗證
+                // 處理身份驗證：優先使用注入的 Custom Token，否則使用匿名登入
                 if (initialAuthToken) {
-                    // 使用 Canvas 環境的自訂認證 Token (這是解決錯誤的關鍵)
+                    // 嘗試使用自訂 Token 登入
                     await signInWithCustomToken(auth, initialAuthToken);
                 } else {
-                    // 外部環境或無 Token 時使用匿名登入
+                    // 如果沒有 Token (或 Token 無效)，使用匿名登入
                     await signInAnonymously(auth);
                 }
 
@@ -314,8 +301,7 @@
                         // 設置數據監聽器 (只有在成功登入後才開始)
                         setupDataListener();
                     } else {
-                        // 身份驗證狀態變更為未登入
-                        if (isAuthReady) { // 避免初始化時的錯誤提示
+                        if (isAuthReady) {
                             updateStatus('❌ 身份驗證狀態變更: 使用者已登出', false);
                         }
                         userId = null;
@@ -338,9 +324,10 @@
                 let errorMessage = `連線失敗。代碼: ${error.code || '未知'}`;
                 
                 if (error.code === 'auth/network-request-failed') {
-                    errorMessage = '無法連線到 Firebase 服務。請檢查您的網路或 API Key 限制。';
+                    errorMessage = '無法連線到 Firebase 服務。請檢查您的網路連線。';
                 } else if (error.code === 'auth/operation-not-allowed') {
-                    errorMessage = 'Firebase Authentication 服務或登入方法未在您的專案中啟用。';
+                    // 如果啟用匿名登入後仍出現此錯誤，可能原因為其他權限問題
+                    errorMessage = '驗證方法未啟用或有其他權限問題。';
                 } else if (error.code) {
                     errorMessage = `驗證失敗：${error.code}`;
                 }
