@@ -3,13 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>即時備忘錄 (Firebase 連線修復)</title>
-    <!-- 引入 Tailwind CSS CDN 以實現美觀的響應式設計 -->
+    <title>即時備忘錄 (最終連線檢查)</title>
+    <!-- 引入 Tailwind CSS CDN -->
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         body {
             font-family: 'Inter', sans-serif;
-            background-color: #f1f5f9; /* Light blue-gray background */
+            background-color: #f1f5f9;
         }
         .container-card {
             max-width: 600px;
@@ -19,13 +19,13 @@
 </head>
 <body class="p-4 md:p-8 min-h-screen flex flex-col items-center justify-center">
 
-    <div id="app-container" class="container-card bg-white p-6 md:p-10 rounded-xl shadow-2xl space-y-6 transform transition duration-500 hover:shadow-3xl">
+    <div id="app-container" class="container-card bg-white p-6 md:p-10 rounded-xl shadow-2xl space-y-6">
         <h1 class="text-4xl font-extrabold text-gray-900 text-center border-b-4 border-indigo-500 pb-3 mb-6">
             ✨ 即時備忘錄 (To-Do List)
         </h1>
 
         <!-- 連線狀態顯示區塊 -->
-        <div id="status-box" class="p-3 rounded-lg shadow-inner text-sm transition duration-300">
+        <div id="status-box" class="p-3 rounded-lg shadow-inner text-sm transition duration-300 bg-yellow-100">
             <p id="connection-message" class="font-bold text-gray-700">正在初始化連線...</p>
             <p id="user-id-display" class="text-xs text-gray-500 break-all mt-1 hidden">使用者 ID: </p>
         </div>
@@ -42,7 +42,6 @@
         <div class="mt-8">
             <h2 class="text-2xl font-semibold text-gray-800 mb-3">我的備忘錄清單 (公開列表)</h2>
             <ul id="todo-list" class="space-y-3">
-                <!-- 備忘錄將會在這裡即時顯示 -->
                 <li class="p-4 bg-gray-50 text-gray-500 rounded-lg border border-gray-200 text-center italic">
                     連線成功後將會載入備忘錄...
                 </li>
@@ -66,22 +65,24 @@
         } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
         import { setLogLevel } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
-        // 設置日誌級別為 Debug 以便調試
+        // 設置日誌級別為 Debug
         setLogLevel('Debug');
 
-        // 2. 外部環境運行時的 Firebase 配置 (***重要***)
-        
-        // !!! 步驟 1: 如果在 Canvas 以外運行，請替換以下佔位符 !!!
-        // 請確保您從 Firebase Console 複製的物件是完整的，並且值被雙引號包圍。
+        // =================================================================================
+        // !!! 步驟 2: 如果在 Canvas 以外運行，請在此處替換為您的實際配置 !!!
+        // ---------------------------------------------------------------------------------
         const YOUR_FIREBASE_CONFIG = {
-            apiKey: "AIzaSyCk54DEp6rzvpfQBBNW_iJByZ3boyHEPF0", // <-- 必須替換 (例如: "AIzaSyC...")
+            // 請用您專案的真實 API Key 替換 'YOUR_API_KEY'，包含雙引號!
+            apiKey: "AIzaSyCk54DEp6rzvpfQBBNW_iJByZ3boyHEPF0", 
             authDomain: "poolpokergame-b88ed.firebaseapp.com",
-            projectId: "poolpokergame-b88ed", // <-- 必須替換
+            // 請用您專案的真實 Project ID 替換 'YOUR_PROJECT_ID'，包含雙引號!
+            projectId: "poolpokergame-b88ed", 
             storageBucket: "poolpokergame-b88ed.appspot.com",
             messagingSenderId: "574863840102",
             appId: "1:574863840102:web:14368aaf84b3640c6eeea7"
         };
-        // !!! 替換結束 !!!
+        // ---------------------------------------------------------------------------------
+        // =================================================================================
 
 
         // 3. 全域變量、配置和 DOM 元素
@@ -109,15 +110,8 @@
         const addBtn = document.getElementById('add-todo-btn');
         const todoListEl = document.getElementById('todo-list');
 
-        // 4. 配置驗證 (新增的防呆機制)
-        function validateConfig(config) {
-            if (config.apiKey.includes('YOUR_API_KEY') || config.projectId.includes('YOUR_PROJECT_ID')) {
-                return false;
-            }
-            return true;
-        }
-
-        // 5. UI/狀態管理函數
+        
+        // 4. UI/狀態管理函數
         
         /**
          * 更新連線狀態 UI
@@ -143,7 +137,7 @@
             }
         }
 
-        // 6. Firestore 數據操作函數
+        // 5. Firestore 數據操作函數
         
         /**
          * 處理新增備忘錄
@@ -158,7 +152,7 @@
             const newTodo = {
                 text: text,
                 timestamp: Date.now(),
-                userId: userId, // 記錄是哪個用戶新增的
+                userId: userId, 
                 completed: false
             };
 
@@ -252,15 +246,14 @@
         }
 
 
-        // 7. Firebase 初始化和身份驗證流程
+        // 6. Firebase 初始化和身份驗證流程
         async function initFirebase() {
-            // 優先檢查外部配置是否為佔位符
-            if (!isInCanvas && !validateConfig(firebaseConfig)) {
-                updateStatus('❌ 配置錯誤：請將程式碼中的 YOUR_FIREBASE_CONFIG 替換為您的實際 Firebase 專案資訊！', false);
-                return;
-            }
-
             try {
+                // 檢查配置是否仍為佔位符
+                if (!isInCanvas && firebaseConfig.apiKey.includes('YOUR_API_KEY')) {
+                    throw new Error("手動配置錯誤：請在程式碼中替換 YOUR_FIREBASE_CONFIG 的值！");
+                }
+                
                 // 初始化 Firebase
                 const app = initializeApp(firebaseConfig);
                 db = getFirestore(app);
@@ -281,7 +274,6 @@
                         userId = user.uid;
                         isAuthReady = true;
                         displayUserId();
-                        updateStatus('✅ 身份驗證完成，開始載入資料...', true);
                         
                         // 設置數據監聽器
                         setupDataListener();
@@ -301,13 +293,18 @@
                 });
 
             } catch (error) {
-                // 捕獲並顯示初始化錯誤 (包括 auth/configuration-not-found)
+                // 捕獲並顯示初始化錯誤
                 console.error("Firebase Initialization/Authentication Error:", error);
-                updateStatus(`❌ 連線失敗: ${error.message}`, false);
+                // 特殊處理配置錯誤
+                if (error.code === 'auth/configuration-not-found' || error.message.includes("手動配置錯誤")) {
+                    updateStatus('🚨 致命錯誤：Firebase 配置無效。請務必在程式碼中替換為您的 API Key 和 Project ID。', false);
+                } else {
+                     updateStatus(`❌ 連線失敗: ${error.message}`, false);
+                }
             }
         }
 
-        // 8. 啟動應用程式
+        // 7. 啟動應用程式
         window.onload = initFirebase;
     </script>
 </body>
