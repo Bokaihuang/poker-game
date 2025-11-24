@@ -8,6 +8,11 @@
 <script src="https://unpkg.com/react@18/umd/react.development.js" crossorigin></script>
 <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js" crossorigin></script>
 <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<!-- Firebase CDN 全局變數 -->
+<script src="https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js"></script>
+<script src="https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js"></script>
+<script src="https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js"></script>
+
 <style>
 body { font-family: 'Inter', sans-serif; background-color: #1a202c; color: white; }
 .ball, .stripe-ball {
@@ -24,34 +29,30 @@ body { font-family: 'Inter', sans-serif; background-color: #1a202c; color: white
 <body>
 <div id="root"></div>
 
-<script type="module">
-import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-import { getFirestore, doc, onSnapshot, setDoc, updateDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+<script type="text/babel">
 
+const { useState, useEffect } = React;
+
+// -------------------- Firebase 初始化 --------------------
 const firebaseConfig = {
-  apiKey: "AIzaSyCk54DEp6rzvpfQBBNW_iJByZ3boyHEPF0",
+  apiKey: "AIzaSyCk54DEp6rzvpfQBBNW_iJByZ3boyHEPF0", 
   authDomain: "poolpokergame-b88ed.firebaseapp.com",
   projectId: "poolpokergame-b88ed",
   storageBucket: "poolpokergame-b88ed.firebasestorage.app",
   messagingSenderId: "574863840102",
   appId: "1:574863840102:web:14368aaf84b3640c6eeea7"
 };
-
-const app = initializeApp(firebaseConfig);
-const auth = getAuth(app);
-const db = getFirestore(app);
+firebase.initializeApp(firebaseConfig);
+const auth = firebase.auth();
+const db = firebase.firestore();
 const ROOM_PATH = "artifacts/poolpokergame-b88ed/public/data/main-room";
-</script>
-
-<script type="text/babel">
-const { useState, useEffect } = React;
 
 const BALL_COLORS = {
   1:'yellow',2:'blue',3:'red',4:'purple',5:'orange',6:'green',7:'brown',8:'black',
   9:'yellow',10:'blue',11:'red',12:'purple',13:'orange'
 };
 
+// -------------------- React App --------------------
 const App = () => {
   const [user, setUser] = useState(null);
   const [gameState, setGameState] = useState(null);
@@ -60,59 +61,60 @@ const App = () => {
   const [errorMsg, setErrorMsg] = useState('');
 
   useEffect(()=>{
-    signInAnonymously(auth).catch(console.error);
-    const unsub = onAuthStateChanged(auth, u => { setUser(u); setLoading(false); });
-    return () => unsub();
+    auth.signInAnonymously().catch(console.error);
+    const unsub = auth.onAuthStateChanged(u => { setUser(u); setLoading(false); });
+    return ()=> unsub();
   },[]);
 
   useEffect(()=>{
     if(!user) return;
-    const docRef = doc(db, ROOM_PATH);
-    const unsub = onSnapshot(docRef, docSnap => {
+    const docRef = db.doc(ROOM_PATH);
+    const unsub = docRef.onSnapshot(docSnap => {
       if(docSnap.exists()) setGameState(docSnap.data());
       else setGameState(null);
     });
     return ()=> unsub();
   },[user]);
 
+  // -------------------- 加入房間 --------------------
   const joinRoom = async () => {
     if(!nickname.trim()) { setErrorMsg("請輸入暱稱"); return; }
     const myId = user.uid;
-    const docRef = doc(db, ROOM_PATH);
+    const docRef = db.doc(ROOM_PATH);
     try {
-      if(!gameState) {
+      if(!gameState){
         // 建立房間
         const players = { [myId]: { id: myId, nickname:nickname.trim(), cards:[], marked:[] } };
-        await setDoc(docRef, { creatorId:nickname==='kai'?myId:null, totalPlayers:2, gameStarted:false, cardsPerPlayer:8, players, ballsStatus:{} });
+        await docRef.set({ creatorId:nickname==='kai'?myId:null, totalPlayers:2, gameStarted:false, cardsPerPlayer:8, players, ballsStatus:{} });
       } else {
-        // 加入房間
-        if(Object.keys(gameState.players||{}).length>=5) { setErrorMsg("房間已滿"); return; }
-        await updateDoc(docRef, { [`players.${myId}`]: { id:myId, nickname:nickname.trim(), cards:[], marked:[] } });
+        if(Object.keys(gameState.players||{}).length>=5){ setErrorMsg("房間已滿"); return; }
+        await docRef.update({ [`players.${myId}`]: { id:myId, nickname:nickname.trim(), cards:[], marked:[] } });
       }
       setErrorMsg('');
-    } catch(e){ console.error(e); setErrorMsg("加入失敗"); }
+    }catch(e){ console.error(e); setErrorMsg("加入失敗"); }
   };
 
+  // -------------------- 退出房間 --------------------
   const leaveRoom = async () => {
     if(!user || !gameState) return;
     const myId = user.uid;
-    const docRef = doc(db, ROOM_PATH);
+    const docRef = db.doc(ROOM_PATH);
     try{
       const newPlayers = {...gameState.players};
       delete newPlayers[myId];
-      const ballsStatus = gameState.ballsStatus||{};
       if(gameState.creatorId===myId){
         // 房主退出，清空房間
-        await setDoc(docRef, { creatorId:null, totalPlayers:2, gameStarted:false, cardsPerPlayer:8, players:{}, ballsStatus:{} });
+        await docRef.set({ creatorId:null, totalPlayers:2, gameStarted:false, cardsPerPlayer:8, players:{}, ballsStatus:{} });
       } else {
-        await updateDoc(docRef, { players:newPlayers });
+        await docRef.update({ players:newPlayers });
       }
-    }catch(e){console.error(e);}
+    }catch(e){ console.error(e); }
   };
 
+  // -------------------- 發牌 --------------------
   const startGame = async () => {
     if(!gameState) return;
-    if(gameState.creatorId!==user.uid) { setErrorMsg("只有房主可發牌"); return; }
+    if(gameState.creatorId!==user.uid){ setErrorMsg("只有房主可發牌"); return; }
     let deck = [];
     for(let i=1;i<=13;i++) deck.push(i,i,i,i);
     deck.sort(()=>Math.random()-0.5);
@@ -121,13 +123,14 @@ const App = () => {
     Object.values(gameState.players).forEach((p,i)=>{
       newPlayers[p.id] = {...p, cards:deck.slice(i*cardsPerPlayer,(i+1)*cardsPerPlayer), marked:[]};
     });
-    const docRef = doc(db, ROOM_PATH);
-    await updateDoc(docRef,{ players:newPlayers, gameStarted:true, ballsStatus:{} });
+    const docRef = db.doc(ROOM_PATH);
+    await docRef.update({ players:newPlayers, gameStarted:true, ballsStatus:{} });
   };
 
+  // -------------------- 點選球 --------------------
   const toggleBall = async (num) => {
     if(!gameState) return;
-    const docRef = doc(db, ROOM_PATH);
+    const docRef = db.doc(ROOM_PATH);
     const ballsStatus = {...(gameState.ballsStatus||{})};
     ballsStatus[num] = !ballsStatus[num];
     const newPlayers = {...gameState.players};
@@ -137,26 +140,22 @@ const App = () => {
       else marked.delete(num);
       p.marked = Array.from(marked);
     });
-    await updateDoc(docRef,{ ballsStatus, players:newPlayers });
+    await docRef.update({ ballsStatus, players:newPlayers });
   };
 
-  if(loading || !user){
-    return <div className="h-screen flex items-center justify-center text-white">連線中...</div>;
-  }
+  if(loading || !user) return <div className="h-screen flex items-center justify-center text-white">連線中...</div>;
 
   const isJoined = gameState && gameState.players && gameState.players[user.uid];
   const isCreator = gameState && gameState.creatorId===user.uid;
 
-  if(!isJoined){
-    return <div className="min-h-screen flex items-center justify-center">
-      <div className="bg-slate-800 p-8 rounded-xl w-80 flex flex-col gap-4">
-        <h1 className="text-2xl text-emerald-400 text-center font-bold">🎱 Pool Poker</h1>
-        {errorMsg && <div className="text-red-400 text-center">{errorMsg}</div>}
-        <input type="text" value={nickname} onChange={e=>setNickname(e.target.value)} placeholder="暱稱" className="p-2 rounded w-full text-black"/>
-        <button onClick={joinRoom} className="bg-emerald-600 p-2 rounded text-white font-bold">加入房間</button>
-      </div>
-    </div>;
-  }
+  if(!isJoined) return <div className="min-h-screen flex items-center justify-center">
+    <div className="bg-slate-800 p-8 rounded-xl w-80 flex flex-col gap-4">
+      <h1 className="text-2xl text-emerald-400 text-center font-bold">🎱 Pool Poker</h1>
+      {errorMsg && <div className="text-red-400 text-center">{errorMsg}</div>}
+      <input type="text" value={nickname} onChange={e=>setNickname(e.target.value)} placeholder="暱稱" className="p-2 rounded w-full text-black"/>
+      <button onClick={joinRoom} className="bg-emerald-600 p-2 rounded text-white font-bold">加入房間</button>
+    </div>
+  </div>;
 
   return <div className="min-h-screen bg-slate-900 flex flex-col p-4">
     <div className="flex justify-between mb-4 items-center">
@@ -203,6 +202,7 @@ const App = () => {
 
 const root = ReactDOM.createRoot(document.getElementById('root'));
 root.render(<App />);
+
 </script>
 </body>
 </html>
