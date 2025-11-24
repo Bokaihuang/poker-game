@@ -242,7 +242,14 @@
         cards.forEach(c=>{
           const cardEl=document.createElement('div'); cardEl.className='card';
           const isMine = currentUser && p.id===currentUser.uid;
-          const rank = parseInt(c.slice(1)) || c;
+          let rank;
+          const r = c.slice(1);
+            
+          if (r === 'A') rank = 1;
+          else if (r === 'J') rank = 11;
+          else if (r === 'Q') rank = 12;
+          else if (r === 'K') rank = 13;
+          else rank = parseInt(r);
           if(isMine && revealedNumbers.includes(rank)) cardEl.classList.add('marked');
           if(isMine){ cardEl.classList.add('card-face'); cardEl.textContent=c; cardEl.style.cursor='pointer'; cardEl.onclick=()=>markCard(p.id,c); if(c[0]==='♥'||c[0]==='♦') cardEl.classList.add('suit-red'); else cardEl.classList.add('suit-black'); }
           else{
