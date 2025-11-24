@@ -1,12 +1,9 @@
-
-
-
 <!doctype html>
 <html lang="zh-TW">
 <head>
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width,initial-scale=1"/>
-  <title>Pool Poker — main-room</title>
+  <title>Pool Poker — main-room (with Foul draw)</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <style>
     body { background:#071024; color:#e6eef8; font-family: Inter, system-ui, -apple-system, "Segoe UI", Roboto, Arial; }
@@ -17,6 +14,9 @@
     .small { font-size:.85rem; color:#cfe8ff; }
     .suit-red { color:#dc2626; } /* diamonds/hearts */
     .suit-black { color:#111827; } /* clubs/spades */
+    .foul-btn { background:#ef4444; color:white; padding:6px 8px; border-radius:6px; font-weight:600; cursor:pointer; border:none; }
+    .foul-btn[disabled] { opacity:0.5; cursor:not-allowed; }
+    .player-header { display:flex; gap:8px; align-items:center; justify-content:space-between; }
   </style>
 </head>
 <body>
@@ -78,7 +78,7 @@
     import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
     import {
       getFirestore, doc, onSnapshot, setDoc, updateDoc, getDoc,
-      deleteDoc, serverTimestamp, arrayUnion, deleteField
+      deleteDoc, serverTimestamp, arrayUnion, deleteField, runTransaction
     } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
     // ---------- CONFIG ----------
@@ -95,6 +95,7 @@
     const ROOM_PATH = `artifacts/${APP_ID}/public/data/pool_poker_rooms/main_room`;
     const CARDS_PER_PLAYER = 8;
     const MAX_PLAYERS = 5;
+    const MAX_EXTRA = 6; // 可再抽 6 張（因此最多 14 張）
 
     // ---------- UI elements ----------
     const statusEl = document.getElementById('status');
@@ -125,7 +126,7 @@
 
     function log(...args) {
       console.log(...args);
-      logEl.textContent += args.map(a => (typeof a === 'object' ? JSON.stringify(a) : String(a))).join(' ') + "\\n";
+      logEl.textContent += args.map(a => (typeof a === 'object' ? JSON.stringify(a) : String(a))).join(' ') + "\n";
       logEl.scrollTop = logEl.scrollHeight;
     }
     function setStatus(s) { statusEl.textContent = s; }
@@ -205,15 +206,14 @@
       try {
         const snap = await getDoc(roomRef);
         if (!snap.exists()) {
-          // create room and set creator to this user if kai, else create room with no creator? requirement: kai player is host => if first to create and nick != kai, still set creatorId? 
-          // We'll set creatorId if the joining user is kai; otherwise room created without creator until kai joins
           const players = {};
           players[currentUser.uid] = { id: currentUser.uid, nickname: isKai ? 'kai' : nickInput, cards: [], marked: [] };
           const docData = {
             players,
             gameStarted: false,
             notice: isKai ? '房主 kai 已建立房間' : '房間已建立，等待 kai 成為房主',
-            updatedAt: serverTimestamp()
+            updatedAt: serverTimestamp(),
+            deck: [] // initial empty deck until host starts game
           };
           if (isKai) docData.creatorId = currentUser.uid;
           await setDoc(roomRef, docData);
@@ -226,7 +226,6 @@
           // join existing
           const data = snap.data();
           const players = data.players || {};
-          // count real players
           const realCount = Object.values(players).filter(p => p && typeof p === 'object' && p.id).length;
           if (realCount >= MAX_PLAYERS) {
             setStatus('房間已滿');
@@ -236,11 +235,9 @@
             setStatus('您已在房間中');
             return;
           }
-          // If joining as kai: we must set creatorId if not set yet (or if existing creator is someone else? requirement: kai is host; so we treat kai's presence as host)
           const updateObj = { updatedAt: serverTimestamp() };
           updateObj[`players.${currentUser.uid}`] = { id: currentUser.uid, nickname: isKai ? 'kai' : nickInput, cards: [], marked: [] };
           if (isKai) {
-            // set as creatorId (overwrite if exists)
             updateObj['creatorId'] = currentUser.uid;
             updateObj['notice'] = 'kai 已成為房主';
             myNickname = 'kai';
@@ -262,7 +259,6 @@
     btnLeave.addEventListener('click', async () => {
       if (!currentUser) return;
       try {
-        // if current user is host (creatorId), then host-leave should delete the room (handled separately)
         if (gameState && gameState.creatorId === currentUser.uid && myNickname === 'kai') {
           // host exit => delete whole doc
           await deleteDoc(roomRef);
@@ -275,7 +271,6 @@
           [`players.${currentUser.uid}`]: deleteField(),
           updatedAt: serverTimestamp()
         });
-        // local UI will be updated by onSnapshot which sees player removed
         setStatus('已退出房間');
         myNickname = '';
       } catch (e) {
@@ -298,26 +293,32 @@
         if (pids.length > MAX_PLAYERS) { setStatus('人數超過上限'); return; }
 
         // build 52 card deck
-        let deck = buildDeck().map(c => c.code);
-        shuffle(deck);
+        let deckObj = buildDeck().map(c => c.code);
+        shuffle(deckObj);
 
         // deal sequentially
         const updateObj = { gameStarted: true, notice: '遊戲開始：已發牌', updatedAt: serverTimestamp() };
         pids.forEach((pid, idx) => {
           const start = idx * CARDS_PER_PLAYER;
-          const hand = deck.slice(start, start + CARDS_PER_PLAYER);
+          const hand = deckObj.slice(start, start + CARDS_PER_PLAYER);
           updateObj[`players.${pid}.cards`] = hand;
           updateObj[`players.${pid}.marked`] = [];
         });
+
+        // remaining deck (those not dealt)
+        const remainingDeck = deckObj.slice(pids.length * CARDS_PER_PLAYER);
+        updateObj['deck'] = remainingDeck;
+
         await updateDoc(roomRef, updateObj);
         setStatus('發牌完成');
+        log('deck remaining', remainingDeck.length);
       } catch (e) {
         log('start err', e);
         setStatus('發牌失敗：' + (e.message || e));
       }
     });
 
-    // host restart: clear all hands, set gameStarted false
+    // host restart: clear all hands, set gameStarted false and clear deck
     btnRestart.addEventListener('click', async () => {
       if (!currentUser || !gameState) return;
       if (gameState.creatorId !== currentUser.uid || myNickname !== 'kai') {
@@ -333,6 +334,8 @@
             updateObj[`players.${pid}.marked`] = [];
           }
         });
+        // clear deck as well
+        updateObj['deck'] = [];
         await updateDoc(roomRef, updateObj);
         setStatus('已重開');
       } catch (e) {
@@ -359,16 +362,52 @@
       }
     }
 
+    // ---------- Foul: draw one card from deck (transaction) ----------
+    async function foulDrawFor(playerId) {
+      if (!currentUser) return;
+      try {
+        await runTransaction(db, async (tx) => {
+          const snap = await tx.get(roomRef);
+          if (!snap.exists()) throw new Error('房間不存在');
+          const data = snap.data();
+          const deck = Array.isArray(data.deck) ? [...data.deck] : [];
+          const players = data.players || {};
+          const target = players[playerId];
+          if (!target || !target.id) throw new Error('玩家不存在');
+          const currentCount = Array.isArray(target.cards) ? target.cards.length : 0;
+          if (currentCount >= CARDS_PER_PLAYER + MAX_EXTRA) {
+            throw new Error('此玩家已達最多 14 張（不能再抽）');
+          }
+          if (deck.length === 0) {
+            throw new Error('剩餘牌已經抽完');
+          }
+          // draw top (last) card
+          const drawn = deck.pop();
+          // push into player's cards
+          const newPlayers = { ...players, [playerId]: { ...target, cards: [...(target.cards||[]), drawn] } };
+          // commit
+          tx.update(roomRef, {
+            players: newPlayers,
+            deck: deck,
+            updatedAt: serverTimestamp(),
+            notice: `${target.nickname || '玩家'} 犯規抽到 ${drawn}`
+          });
+        });
+        setStatus('犯規抽牌成功');
+      } catch (e) {
+        log('foul draw err', e);
+        setStatus('犯規抽牌失敗：' + (e.message || e));
+      }
+    }
+
     // ---------- Render UI ----------
     function renderUI() {
-      // not in room if gameState null or players doesn't include us
       const players = (gameState && gameState.players) ? gameState.players : {};
       const cleanPlayers = {};
       Object.keys(players).forEach(k => {
         if (players[k] && typeof players[k] === 'object' && players[k].id) cleanPlayers[k] = players[k];
       });
 
-      // if room doc doesn't exist -> show join panel
       if (!gameState) {
         joinPanel.classList.remove('hidden');
         roomPanel.classList.add('hidden');
@@ -376,32 +415,26 @@
         return;
       }
 
-      // if we are not a player in players map -> show join panel
       const amInRoom = currentUser && cleanPlayers[currentUser.uid];
       if (!amInRoom) {
         joinPanel.classList.remove('hidden');
         roomPanel.classList.add('hidden');
-        // show owner and count though
         roomOwnerEl.textContent = cleanPlayers[gameState.creatorId]?.nickname || '—';
         roomCountEl.textContent = `${Object.keys(cleanPlayers).length} / ${MAX_PLAYERS}`;
         return;
       }
 
-      // else show room panel
       joinPanel.classList.add('hidden');
       roomPanel.classList.remove('hidden');
 
-      // my nick
       myNickname = cleanPlayers[currentUser.uid].nickname || myNickname;
       myNickEl.textContent = myNickname;
 
-      // owner info
       const ownerNick = cleanPlayers[gameState.creatorId]?.nickname || '—';
       roomOwnerEl.textContent = ownerNick;
       roomCountEl.textContent = `${Object.keys(cleanPlayers).length} / ${MAX_PLAYERS}`;
       noticeEl.textContent = gameState.notice || '';
 
-      // show host controls only if i'm kai and creatorId matches me
       const amHost = gameState.creatorId === currentUser.uid && myNickname === 'kai';
       if (amHost) {
         btnStart.classList.remove('hidden');
@@ -413,7 +446,6 @@
 
       // build players area
       playersArea.innerHTML = '';
-      // order: me first
       const pList = Object.values(cleanPlayers);
       pList.sort((a,b) => (a.id === currentUser.uid ? -1 : (b.id === currentUser.uid ? 1 : 0)));
 
@@ -422,9 +454,47 @@
         wrapper.className = 'p-3 rounded bg-slate-800 border border-slate-700';
 
         const header = document.createElement('div');
-        header.className = 'flex justify-between items-center mb-2';
-        header.innerHTML = `<div><strong>${p.nickname || ('p_'+p.id.slice(0,6))}</strong> ${p.id===currentUser.uid?'<span class="small"> (您)</span>':''}</div>
-                            <div class="small">標記 ${(p.marked||[]).length} / ${CARDS_PER_PLAYER}</div>`;
+        header.className = 'player-header mb-2';
+        // left: name | right: marked/count & foul button
+        const left = document.createElement('div');
+        left.innerHTML = `<strong>${p.nickname || ('p_'+p.id.slice(0,6))}</strong> ${p.id===currentUser.uid?'<span class="small"> (您)</span>':''}`;
+
+        const right = document.createElement('div');
+        right.style.display = 'flex';
+        right.style.gap = '8px';
+        right.style.alignItems = 'center';
+        const countSpan = document.createElement('div');
+        countSpan.className = 'small';
+        const currentCardsCount = (p.cards||[]).length;
+        countSpan.textContent = `牌 ${currentCardsCount} / ${CARDS_PER_PLAYER + MAX_EXTRA}`;
+
+        // foul button
+        const foulBtn = document.createElement('button');
+        foulBtn.className = 'foul-btn';
+        foulBtn.textContent = '犯規 +1';
+        // disable if not game started or player already >=14 or deck empty
+        const deckLen = (gameState && Array.isArray(gameState.deck)) ? gameState.deck.length : 0;
+        if (!gameState.gameStarted) foulBtn.disabled = true;
+        if (currentCardsCount >= CARDS_PER_PLAYER + MAX_EXTRA) foulBtn.disabled = true;
+        if (deckLen === 0) foulBtn.disabled = true;
+        // attach listener
+        foulBtn.onclick = () => {
+          // only allow clicking if this player is the current user (we still allow host to draw for self)
+          // requirement: every player has their own foul button (they click their own)
+          if (p.id !== currentUser.uid) {
+            // If you want players to be able to make others draw, change this behavior.
+            setStatus('您只能為自己按犯規（請切換到該玩家的帳號）');
+            return;
+          }
+          // call transaction draw
+          foulDrawFor(p.id);
+        };
+
+        right.appendChild(countSpan);
+        right.appendChild(foulBtn);
+
+        header.appendChild(left);
+        header.appendChild(right);
         wrapper.appendChild(header);
 
         const cardsRow = document.createElement('div');
@@ -452,11 +522,9 @@
             cardEl.style.cursor = 'pointer';
             cardEl.title = isMarked ? '已標記' : '點擊以標記';
             cardEl.onclick = () => markCard(p.id, c);
-            // color suits: if red suit then red
             if (c[0] === '♥' || c[0] === '♦') cardEl.classList.add('suit-red');
             else cardEl.classList.add('suit-black');
           } else {
-            // other player's view: show back unless marked
             if (isMarked) {
               cardEl.classList.add('card-face');
               cardEl.textContent = c;
@@ -483,3 +551,4 @@
   </script>
 </body>
 </html>
+
