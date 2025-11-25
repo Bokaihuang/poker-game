@@ -1,349 +1,222 @@
 <!doctype html>
 <html lang="zh-TW">
-
 <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width,initial-scale=1" />
-    <title>Pool Poker — main-room</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <style>
-        body {
-            background: #071024;
-            color: #e6eef8;
-            font-family: Inter, system-ui, -apple-system, "Segoe UI", Roboto, Arial;
-        }
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>Pool Poker — main-room</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body { background:#071024; color:#e6eef8; font-family: Inter, system-ui, -apple-system, "Segoe UI", Roboto, Arial; }
+    .card { width:54px; height:74px; border-radius:8px; display:flex;align-items:center;justify-content:center;font-weight:700;box-shadow:0 6px 16px rgba(0,0,0,.6); }
+    .card-back { background:linear-gradient(180deg,#0b1220,#081228); border:2px solid rgba(255,255,255,.04); color:transparent; }
+    .card-face { background:white; color:#071024; border:2px solid rgba(2,6,23,.06); }
+    .marked { outline:3px solid #facc15; transform:scale(1.05); } /* 黃框標註 */
+    .small { font-size:.85rem; color:#cfe8ff; }
+    .suit-red { color:#dc2626; }
+    .suit-black { color:#111827; }
+    .foul-btn { background:#ef4444; color:white; padding:6px 8px; border-radius:6px; font-weight:600; cursor:pointer; border:none; }
+    .foul-btn[disabled] { opacity:0.5; cursor:not-allowed; }
+    .player-header { display:flex; gap:8px; align-items:center; justify-content:space-between; }
 
-        .card {
-            width: 54px;
-            height: 74px;
-            border-radius: 8px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-weight: 700;
-            box-shadow: 0 6px 16px rgba(0, 0, 0, .6);
-        }
+    /* ===== 球按鈕 美化 ===== */
+    .ball-btn {
+      width:40px;
+      height:40px;
+      border-radius:50%;
+      font-weight:700;
+      cursor:pointer;
+      border: 2px solid transparent;
+      display:inline-flex;
+      align-items:center;
+      justify-content:center;
+      margin:4px;
+      user-select:none;
+      transition: transform 160ms ease, box-shadow 160ms ease, border-color 160ms ease, filter 160ms ease;
+      box-shadow: 0 6px 12px rgba(2,6,23,0.6), inset 0 -6px 10px rgba(255,255,255,0.03);
+      color: #071024;
+      font-size: 14px;
+    }
+    .ball-btn:hover { transform: translateY(-3px) scale(1.03); filter: brightness(1.06); }
+    .ball-btn:active { transform: translateY(0) scale(0.98); }
 
-        .card-back {
-            background: linear-gradient(180deg, #0b1220, #081228);
-            border: 2px solid rgba(255, 255, 255, .04);
-            color: transparent;
-        }
+    /* 選中狀態 */
+    .ball-btn.selected {
+      border-color: #facc15;
+      box-shadow: 0 8px 18px rgba(250,204,21,0.2), 0 0 8px rgba(250,204,21,0.3);
+      transform: scale(1.12);
+      filter: brightness(1.08);
+    }
 
-        .card-face {
-            background: white;
-            color: #071024;
-            border: 2px solid rgba(2, 6, 23, .06);
-        }
+    /* 球顏色 */
+    .ball-yellow { background: linear-gradient(180deg, #fff59b, #f6d94d); }
+    .ball-blue   { background: linear-gradient(180deg, #9cc3ff, #2b7cff); color: white; }
+    .ball-red    { background: linear-gradient(180deg, #ff9b9b, #ff5252); color: white; }
+    .ball-purple { background: linear-gradient(180deg, #d6b3ff, #8d5cff); color: white; }
+    .ball-orange { background: linear-gradient(180deg, #ffd19a, #ff8c2b); }
+    .ball-green  { background: linear-gradient(180deg, #a9f0b8, #28c76f); color: black; }
+    .ball-maroon { background: linear-gradient(180deg, #c08989, #7a2f2f); color: white; }
+    .ball-black  { background: radial-gradient(circle at 30% 30%, #3b3b3b, #000000 60%); color: white; border-color: rgba(255,255,255,0.06); }
 
-        .marked {
-            outline: 3px solid #f59e0b;
-            transform: scale(1.05);
-        }
+    /* stripe 球 (9~13) */
+    .ball-stripe {
+      position: relative;
+      overflow: visible;
+    }
+    .ball-stripe::before {
+      content:'';
+      position:absolute;
+      top:20%;
+      left:0; right:0;
+      height:60%;
+      border-radius:999px;
+      background: inherit; /* 繼承顏色 */
+    }
 
-        .small {
-            font-size: .85rem;
-            color: #cfe8ff;
-        }
-
-        .suit-red {
-            color: #dc2626;
-        }
-
-        .suit-black {
-            color: #111827;
-        }
-
-        .foul-btn {
-            background: #ef4444;
-            color: white;
-            padding: 6px 8px;
-            border-radius: 6px;
-            font-weight: 600;
-            cursor: pointer;
-            border: none;
-        }
-
-        .foul-btn[disabled] {
-            opacity: 0.5;
-            cursor: not-allowed;
-        }
-
-        .player-header {
-            display: flex;
-            gap: 8px;
-            align-items: center;
-            justify-content: space-between;
-        }
-
-        /* 球按鈕 美化 */
-        .ball-btn {
-            width: 40px;
-            height: 40px;
-            border-radius: 50%;
-            font-weight: 700;
-            cursor: pointer;
-            border: 2px solid transparent;
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            margin: 4px;
-            user-select: none;
-            transition: transform 160ms ease, box-shadow 160ms ease, border-color 160ms ease, filter 160ms ease;
-            color: #071024;
-            font-size: 14px;
-            text-align: center;
-            line-height: 1;
-        }
-
-        .ball-btn:hover {
-            transform: translateY(-3px) scale(1.03);
-            filter: brightness(1.06);
-        }
-
-        .ball-btn:active {
-            transform: translateY(0) scale(0.98);
-        }
-
-        .ball-btn.selected {
-            border-color: #fff;
-            box-shadow: 0 8px 18px rgba(255, 255, 255, 0.08), 0 0 8px rgba(255, 255, 255, 0.12);
-            transform: scale(1.12);
-            filter: brightness(1.08);
-        }
-
-        /* 單色球 */
-        .ball-yellow {
-            background: #fff59b;
-        }
-
-        .ball-blue {
-            background: #2b7cff;
-            color: white;
-        }
-
-        .ball-red {
-            background: #ff5252;
-            color: white;
-        }
-
-        .ball-purple {
-            background: #8d5cff;
-            color: white;
-        }
-
-        .ball-orange {
-            background: #ff8c2b;
-        }
-
-        .ball-green {
-            background: #28c76f;
-            color: black;
-        }
-
-        .ball-maroon {
-            background: #7a2f2f;
-            color: white;
-        }
-
-        .ball-black {
-            background: radial-gradient(circle at 30% 30%, #3b3b3b, #000 60%);
-            color: white;
-            border-color: rgba(255, 255, 255, 0.06);
-        }
-
-        /* 條紋球 9~13 */
-        .ball-9 {
-            background: linear-gradient(to bottom, white 20%, #fff59b 20%, #fff59b 80%, white 80%);
-        }
-
-        .ball-10 {
-            background: linear-gradient(to bottom, white 20%, #2b7cff 20%, #2b7cff 80%, white 80%);
-            color: white;
-        }
-
-        .ball-11 {
-            background: linear-gradient(to bottom, white 20%, #ff5252 20%, #ff5252 80%, white 80%);
-            color: white;
-        }
-
-        .ball-12 {
-            background: linear-gradient(to bottom, white 20%, #8d5cff 20%, #8d5cff 80%, white 80%);
-            color: white;
-        }
-
-        .ball-13 {
-            background: linear-gradient(to bottom, white 20%, #ff8c2b 20%, #ff8c2b 80%, white 80%);
-        }
-
-        /* 小螢幕調整 */
-        @media (max-width:640px) {
-            .ball-btn {
-                width: 34px;
-                height: 34px;
-                font-size: 13px;
-                margin: 3px;
-            }
-        }
-    </style>
+    @media (max-width:640px){ .ball-btn { width:34px; height:34px; font-size:13px; margin:3px; } }
+  </style>
 </head>
-
 <body>
-    <div class="max-w-5xl mx-auto p-6">
-        <h1 class="text-2xl font-bold mb-4">Pool Poker — main-room</h1>
+  <div class="max-w-5xl mx-auto p-6">
+    <h1 class="text-2xl font-bold mb-4">Pool Poker — main-room</h1>
+    <div id="status" class="mb-4 text-sm small">初始化中…</div>
 
-        <div id="status" class="mb-4 text-sm small">初始化中…</div>
-
-        <div id="joinPanel" class="mb-6 grid grid-cols-1 sm:grid-cols-3 gap-3">
-            <div class="col-span-2">
-                <label class="small">暱稱</label>
-                <input id="nickname" class="w-full p-2 rounded bg-slate-800 border border-slate-700"
-                    placeholder="輸入暱稱" />
-            </div>
-            <div>
-                <button id="btnJoin" class="w-full py-2 rounded bg-emerald-600 hover:bg-emerald-500">加入房間</button>
-            </div>
-        </div>
-
-        <div id="roomPanel" class="mb-6 p-4 rounded bg-slate-900 border border-slate-700 hidden">
-            <div class="flex items-center justify-between mb-3">
-                <div>
-                    <div class="text-xs small">房間 ID</div>
-                    <div class="font-mono">main-room</div>
-                </div>
-                <div>
-                    <div class="text-xs small">房主</div>
-                    <div id="roomOwner" class="font-bold">—</div>
-                </div>
-                <div>
-                    <div class="text-xs small">人數</div>
-                    <div id="roomCount">0 / 5</div>
-                </div>
-                <div>
-                    <div class="text-xs small">我的暱稱</div>
-                    <div id="myNick" class="font-mono">—</div>
-                </div>
-            </div>
-
-            <div class="flex gap-2 items-center mb-4">
-                <button id="btnStart" class="px-3 py-2 rounded bg-yellow-600 hover:bg-yellow-500 hidden">發牌（房主）</button>
-                <button id="btnRestart" class="px-3 py-2 rounded bg-slate-700 hover:bg-slate-600 hidden">重開（房主）</button>
-                <button id="btnLeave" class="px-3 py-2 rounded bg-red-600 hover:bg-red-500 ml-auto">退出房間</button>
-                <div id="notice" class="ml-4 small text-slate-300"></div>
-            </div>
-
-            <div id="ballButtons" class="mb-4"></div>
-            <div id="playersArea" class="grid grid-cols-1 md:grid-cols-2 gap-4"></div>
-        </div>
-
-        <div id="debug" class="mt-6 p-3 rounded bg-slate-900 border border-slate-700 text-xs small">
-            <div><strong>Debug (console)</strong></div>
-            <pre id="log" class="text-xs mt-2"></pre>
-        </div>
+    <div id="joinPanel" class="mb-6 grid grid-cols-1 sm:grid-cols-3 gap-3">
+      <div class="col-span-2">
+        <label class="small">暱稱</label>
+        <input id="nickname" class="w-full p-2 rounded bg-slate-800 border border-slate-700" placeholder="輸入暱稱" />
+      </div>
+      <div>
+        <button id="btnJoin" class="w-full py-2 rounded bg-emerald-600 hover:bg-emerald-500">加入房間</button>
+      </div>
     </div>
 
-    <script type="module">
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-        import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { getFirestore, doc, onSnapshot, setDoc, updateDoc, getDoc, deleteDoc, serverTimestamp, arrayUnion, deleteField, runTransaction } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+    <div id="roomPanel" class="mb-6 p-4 rounded bg-slate-900 border border-slate-700 hidden">
+      <div class="flex items-center justify-between mb-3">
+        <div><div class="text-xs small">房間 ID</div><div class="font-mono">main-room</div></div>
+        <div><div class="text-xs small">房主</div><div id="roomOwner" class="font-bold">—</div></div>
+        <div><div class="text-xs small">人數</div><div id="roomCount">0 / 5</div></div>
+        <div><div class="text-xs small">我的暱稱</div><div id="myNick" class="font-mono">—</div></div>
+      </div>
 
-        const EXTERNAL_FIREBASE_CONFIG = {
-            apiKey: "AIzaSyCk54DEp6rzvpfQBBNW_iJByZ3boyHEPF0",
-            authDomain: "poolpokergame-b88ed.firebaseapp.com",
-            projectId: "poolpokergame-b88ed",
-            storageBucket: "poolpokergame-b88ed.firebasestorage.app",
-            messagingSenderId: "574863840102",
-            appId: "1:574863840102:web:14368aaf84b3640c6eeea7"
-        };
+      <div class="flex gap-2 items-center mb-4">
+        <button id="btnStart" class="px-3 py-2 rounded bg-yellow-600 hover:bg-yellow-500 hidden">發牌（房主）</button>
+        <button id="btnRestart" class="px-3 py-2 rounded bg-slate-700 hover:bg-slate-600 hidden">重開（房主）</button>
+        <button id="btnLeave" class="px-3 py-2 rounded bg-red-600 hover:bg-red-500 ml-auto">退出房間</button>
+        <div id="notice" class="ml-4 small text-slate-300"></div>
+      </div>
 
-        const APP_ID = EXTERNAL_FIREBASE_CONFIG.projectId;
-        const ROOM_PATH = `artifacts/${APP_ID}/public/data/pool_poker_rooms/main_room`;
-        const CARDS_PER_PLAYER = 8;
-        const MAX_PLAYERS = 5;
-        const MAX_EXTRA = 6;
+      <div id="ballButtons" class="mb-4"></div>
+      <div id="playersArea" class="grid grid-cols-1 md:grid-cols-2 gap-4"></div>
+    </div>
 
-        const statusEl = document.getElementById('status');
-        const logEl = document.getElementById('log');
-        const nicknameInput = document.getElementById('nickname');
-        const btnJoin = document.getElementById('btnJoin');
-        const joinPanel = document.getElementById('joinPanel');
-        const roomPanel = document.getElementById('roomPanel');
-        const roomOwnerEl = document.getElementById('roomOwner');
-        const roomCountEl = document.getElementById('roomCount');
-        const playersArea = document.getElementById('playersArea');
-        const myNickEl = document.getElementById('myNick');
-        const btnStart = document.getElementById('btnStart');
-        const btnRestart = document.getElementById('btnRestart');
-        const btnLeave = document.getElementById('btnLeave');
-        const noticeEl = document.getElementById('notice');
-        const ballButtonsEl = document.getElementById('ballButtons');
+    <div id="debug" class="mt-6 p-3 rounded bg-slate-900 border border-slate-700 text-xs small">
+      <div><strong>Debug (console)</strong></div>
+      <pre id="log" class="text-xs mt-2"></pre>
+    </div>
+  </div>
 
-        const app = initializeApp(EXTERNAL_FIREBASE_CONFIG);
-        const auth = getAuth(app);
-        const db = getFirestore(app);
-        const roomRef = doc(db, ROOM_PATH);
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+    import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+    import { getFirestore, doc, onSnapshot, setDoc, updateDoc, getDoc, deleteDoc, serverTimestamp, arrayUnion, arrayRemove, deleteField, runTransaction } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
-        let currentUser = null;
-        let gameState = null;
-        let myNickname = '';
-        let revealedNumbers = [];
+    const EXTERNAL_FIREBASE_CONFIG = {
+      apiKey: "AIzaSyCk54DEp6rzvpfQBBNW_iJByZ3boyHEPF0",
+      authDomain: "poolpokergame-b88ed.firebaseapp.com",
+      projectId: "poolpokergame-b88ed",
+      storageBucket: "poolpokergame-b88ed.firebasestorage.app",
+      messagingSenderId: "574863840102",
+      appId: "1:574863840102:web:14368aaf84b3640c6eeea7"
+    };
 
-        function log(...args) { console.log(...args); logEl.textContent += args.map(a => typeof a === 'object' ? JSON.stringify(a) : String(a)).join(' ') + '\n'; logEl.scrollTop = logEl.scrollHeight; }
-        function setStatus(s) { statusEl.textContent = s; }
+    const APP_ID = EXTERNAL_FIREBASE_CONFIG.projectId;
+    const ROOM_PATH = `artifacts/${APP_ID}/public/data/pool_poker_rooms/main_room`;
+    const CARDS_PER_PLAYER = 8;
+    const MAX_PLAYERS = 5;
+    const MAX_EXTRA = 6;
 
-        async function doAnonymousAuth() {
-            setStatus('使用匿名登入 Firebase...');
-            try { const cred = await signInAnonymously(auth); log('signed in uid=', cred.user.uid); }
-            catch (e) { log('auth failed', e); setStatus('Auth 失敗'); }
-        }
+    const statusEl = document.getElementById('status');
+    const logEl = document.getElementById('log');
+    const nicknameInput = document.getElementById('nickname');
+    const btnJoin = document.getElementById('btnJoin');
+    const joinPanel = document.getElementById('joinPanel');
+    const roomPanel = document.getElementById('roomPanel');
+    const roomOwnerEl = document.getElementById('roomOwner');
+    const roomCountEl = document.getElementById('roomCount');
+    const playersArea = document.getElementById('playersArea');
+    const myNickEl = document.getElementById('myNick');
+    const btnStart = document.getElementById('btnStart');
+    const btnRestart = document.getElementById('btnRestart');
+    const btnLeave = document.getElementById('btnLeave');
+    const noticeEl = document.getElementById('notice');
+    const ballButtonsEl = document.getElementById('ballButtons');
 
-        onAuthStateChanged(auth, (user) => { currentUser = user; if (user) { setStatus('已登入：' + user.uid); subscribeRoom(); } else { setStatus('未登入'); } });
+    const app = initializeApp(EXTERNAL_FIREBASE_CONFIG);
+    const auth = getAuth(app);
+    const db = getFirestore(app);
+    const roomRef = doc(db, ROOM_PATH);
 
-        let unsubscribe = null;
-        function subscribeRoom() {
-            if (unsubscribe) return;
-            setStatus('訂閱 main-room...');
-            unsubscribe = onSnapshot(roomRef, (snap) => {
-                if (!snap.exists()) { gameState = null; renderUI(); setStatus('房間尚未建立或已被清空'); return; }
-                gameState = snap.data(); renderUI(); setStatus('已連到房間');
-            }, (err) => { log('snapshot err', err); setStatus('訂閱失敗'); });
-        }
+    let currentUser = null;
+    let gameState = null;
+    let myNickname = '';
 
-        const suits = ['♣', '♦', '♥', '♠'];
-        const rankMap = { 1: 'A', 11: 'J', 12: 'Q', 13: 'K' };
-        function buildDeck() { const deck = []; for (let r = 1; r <= 13; r++) { for (let s = 0; s < 4; s++) { const rank = rankMap[r] || String(r); deck.push({ suit: suits[s], rank, code: `${suits[s]}${rank}` }); } } return deck; }
-        function shuffle(arr) { for (let i = arr.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1));[arr[i], arr[j]] = [arr[j], arr[i]]; } return arr; }
+    function log(...args){ console.log(...args); logEl.textContent += args.map(a=>typeof a==='object'?JSON.stringify(a):String(a)).join(' ')+'\n'; logEl.scrollTop = logEl.scrollHeight;}
+    function setStatus(s){ statusEl.textContent = s; }
 
-        function toggleNumber(n) {
-            const idx = revealedNumbers.indexOf(n);
-            if (idx >= 0) revealedNumbers.splice(idx, 1);
-            else revealedNumbers.push(n);
-        }
+    async function doAnonymousAuth(){
+      setStatus('使用匿名登入 Firebase...');
+      try{ const cred=await signInAnonymously(auth); log('signed in uid=', cred.user.uid); } 
+      catch(e){ log('auth failed', e); setStatus('Auth 失敗'); }
+    }
 
-        function renderBallButtons() {
-            ballButtonsEl.innerHTML = '';
-            for (let n = 1; n <= 13; n++) {
-                const btn = document.createElement('button');
-                btn.className = 'ball-btn';
-                btn.textContent = n;
-                if (n >= 9 && n <= 13) { btn.classList.add(`ball-${n}`); }
-                else {
-                    if (n === 1) btn.classList.add('ball-yellow');
-                    else if (n === 2) btn.classList.add('ball-blue');
-                    else if (n === 3) btn.classList.add('ball-red');
-                    else if (n === 4) btn.classList.add('ball-purple');
-                    else if (n === 5) btn.classList.add('ball-orange');
-                    else if (n === 6) btn.classList.add('ball-green');
-                    else if (n === 7) btn.classList.add('ball-maroon');
-                    else if (n === 8) btn.classList.add('ball-black');
-                }
-                if (revealedNumbers.includes(n)) btn.classList.add('selected');
-                btn.onclick = () => { toggleNumber(n); renderUI(); renderBallButtons(); };
-                ballButtonsEl.appendChild(btn);
-            }
-        }
+    onAuthStateChanged(auth,(user)=>{ currentUser=user; if(user){ setStatus('已登入：'+user.uid); subscribeRoom(); } else { setStatus('未登入'); } });
 
-        // ---------- Join / Leave / Start / Restart ----------
+    let unsubscribe=null;
+    function subscribeRoom(){
+      if(unsubscribe) return;
+      setStatus('訂閱 main-room...');
+      unsubscribe = onSnapshot(roomRef,(snap)=>{
+        if(!snap.exists()){ gameState=null; renderUI(); setStatus('房間尚未建立或已被清空'); return; }
+        gameState = snap.data(); renderUI(); setStatus('已連到房間');
+      }, (err)=>{ log('snapshot err',err); setStatus('訂閱失敗'); });
+    }
+
+    const suits=['♣','♦','♥','♠'];
+    const rankMap={1:'A',11:'J',12:'Q',13:'K'};
+    function buildDeck(){ const deck=[]; for(let r=1;r<=13;r++){ for(let s=0;s<4;s++){ const rank=rankMap[r]||String(r); deck.push({suit:suits[s], rank, code:`${suits[s]}${rank}`}); } } return deck; }
+    function shuffle(arr){ for(let i=arr.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [arr[i],arr[j]]=[arr[j],arr[i]]; } return arr; }
+
+    // ---------- 圓形按鈕 ----------
+    function toggleNumber(n) {
+      if(!gameState) return;
+      const numbers = Array.isArray(gameState.revealedNumbers)?[...gameState.revealedNumbers]:[];
+      if(numbers.includes(n)) numbers.splice(numbers.indexOf(n),1);
+      else numbers.push(n);
+      updateDoc(roomRef,{ revealedNumbers: numbers, updatedAt: serverTimestamp() }).catch(e=>log('toggleNumber err',e));
+    }
+
+    function renderBallButtons(){
+      ballButtonsEl.innerHTML='';
+      for(let n=1;n<=13;n++){
+        const btn=document.createElement('button'); btn.className='ball-btn'; btn.textContent=n;
+        if(n===1) btn.classList.add('ball-yellow');
+        else if(n===2) btn.classList.add('ball-blue');
+        else if(n===3) btn.classList.add('ball-red');
+        else if(n===4) btn.classList.add('ball-purple');
+        else if(n===5) btn.classList.add('ball-orange');
+        else if(n===6) btn.classList.add('ball-green');
+        else if(n===7) btn.classList.add('ball-maroon');
+        else if(n===8) btn.classList.add('ball-black');
+        if(n>=9 && n<=13){ btn.classList.add('ball-stripe'); btn.classList.add({9:'ball-yellow',10:'ball-blue',11:'ball-red',12:'ball-purple',13:'ball-orange'}[n]); }
+
+        if(gameState.revealedNumbers && gameState.revealedNumbers.includes(n)) btn.classList.add('selected');
+
+        btn.onclick = () => { toggleNumber(n); };
+        ballButtonsEl.appendChild(btn);
+      }
+    }
+
+    // ---------- Join / Leave / Start / Restart ----------
     btnJoin.addEventListener('click', async()=>{
       if(!currentUser) { setStatus('尚未登入'); return; }
       const nickInput=(nicknameInput.value||'').trim(); if(!nickInput){ setStatus('請先輸入暱稱'); return; }
@@ -352,8 +225,9 @@
         const snap=await getDoc(roomRef);
         if(!snap.exists()){
           const players={}; players[currentUser.uid]={id:currentUser.uid, nickname:isKai?'kai':nickInput, cards:[], marked:[]};
-          const docData={ players, gameStarted:false, notice:isKai?'房主 kai 已建立房間':'房間已建立', updatedAt:serverTimestamp(), deck:[] };
-          if(isKai) docData.creatorId=currentUser.uid; await setDoc(roomRef,docData);
+          const docData={ players, gameStarted:false, notice:isKai?'房主 kai 已建立房間':'房間已建立', updatedAt:serverTimestamp(), deck:[], revealedNumbers:[] };
+          if(isKai) docData.creatorId=currentUser.uid;
+          await setDoc(roomRef,docData);
           myNickname=isKai?'kai':nickInput; nicknameInput.value=isKai?'':nickInput; setStatus(isKai?'已以 kai 建立房間':'房間建立'); return;
         } else {
           const data=snap.data(); const players=data.players||{};
@@ -362,7 +236,7 @@
           const updateObj={ updatedAt:serverTimestamp() };
           updateObj[`players.${currentUser.uid}`]={id:currentUser.uid, nickname:isKai?'kai':nickInput, cards:[], marked:[]};
           if(isKai){ updateObj['creatorId']=currentUser.uid; updateObj['notice']='kai 已成為房主'; myNickname='kai'; nicknameInput.value=''; } else { myNickname=nickInput; }
-          await updateDoc(roomRef,updateObj); setStatus('已加入房間');
+          updateDoc(roomRef,updateObj); setStatus('已加入房間');
         }
       } catch(e){ log('join err',e); setStatus('加入失敗'); }
     });
@@ -376,38 +250,38 @@
         let deckObj=buildDeck().map(c=>c.code); shuffle(deckObj);
         const updateObj={gameStarted:true, notice:'遊戲開始：已發牌', updatedAt:serverTimestamp()};
         pids.forEach((pid,idx)=>{ const start=idx*CARDS_PER_PLAYER; const hand=deckObj.slice(start,start+CARDS_PER_PLAYER); updateObj[`players.${pid}.cards`]=hand; updateObj[`players.${pid}.marked`]=[]; });
-        updateObj['deck']=deckObj.slice(pids.length*CARDS_PER_PLAYER); await updateDoc(roomRef,updateObj);
-        revealedNumbers=[]; renderBallButtons(); setStatus('發牌完成');
+        updateObj['deck']=deckObj.slice(pids.length*CARDS_PER_PLAYER);
+        updateObj['revealedNumbers']=[]; // 清空
+        await updateDoc(roomRef,updateObj);
+        setStatus('發牌完成');
       } catch(e){ log('start err',e); setStatus('發牌失敗'); }
     });
 
     btnRestart.addEventListener('click', async()=>{
       if(!currentUser||!gameState) return; if(gameState.creatorId!==currentUser.uid||myNickname!=='kai'){ setStatus('只有 kai 房主可以重開'); return; }
       try{
-        const players=gameState.players||{}; const updateObj={ gameStarted:false, notice:'房主已重開遊戲', updatedAt:serverTimestamp() };
+        const players=gameState.players||{}; const updateObj={ gameStarted:false, notice:'房主已重開遊戲', updatedAt:serverTimestamp(), revealedNumbers:[] };
         Object.keys(players).forEach(pid=>{ if(players[pid]&&players[pid].id){ updateObj[`players.${pid}.cards`]=[]; updateObj[`players.${pid}.marked`]=[]; } });
         updateObj['deck']=[]; await updateDoc(roomRef,updateObj);
-        revealedNumbers=[]; renderBallButtons(); setStatus('已重開');
+        setStatus('已重開');
       } catch(e){ log('restart err',e); setStatus('重開失敗'); }
     });
 
     // ---------- Render UI ----------
     function renderUI(){
-      const players=(gameState&&gameState.players)?gameState.players:{};
-      const cleanPlayers={}; Object.keys(players).forEach(k=>{ if(players[k]&&players[k].id) cleanPlayers[k]=players[k]; });
       if(!gameState){ joinPanel.classList.remove('hidden'); roomPanel.classList.add('hidden'); myNickEl.textContent='—'; return; }
-
+      const players=gameState.players||{}; const cleanPlayers={}; Object.keys(players).forEach(k=>{ if(players[k]&&players[k].id) cleanPlayers[k]=players[k]; });
       const amInRoom=currentUser&&cleanPlayers[currentUser.uid];
       if(!amInRoom){ joinPanel.classList.remove('hidden'); roomPanel.classList.add('hidden'); roomOwnerEl.textContent=cleanPlayers[gameState.creatorId]?.nickname||'—'; roomCountEl.textContent=`${Object.keys(cleanPlayers).length} / ${MAX_PLAYERS}`; return; }
-
       joinPanel.classList.add('hidden'); roomPanel.classList.remove('hidden'); myNickname=cleanPlayers[currentUser.uid].nickname||myNickname; myNickEl.textContent=myNickname;
-      const ownerNick=cleanPlayers[gameState.creatorId]?.nickname||'—'; roomOwnerEl.textContent=ownerNick; roomCountEl.textContent=`${Object.keys(cleanPlayers).length} / ${MAX_PLAYERS}`; noticeEl.textContent=gameState.notice||'';
+      roomOwnerEl.textContent=cleanPlayers[gameState.creatorId]?.nickname||'—'; roomCountEl.textContent=`${Object.keys(cleanPlayers).length} / ${MAX_PLAYERS}`; noticeEl.textContent=gameState.notice||'';
 
       const amHost=gameState.creatorId===currentUser.uid && myNickname==='kai';
       if(amHost){ btnStart.classList.remove('hidden'); btnRestart.classList.remove('hidden'); } else { btnStart.classList.add('hidden'); btnRestart.classList.add('hidden'); }
 
-      playersArea.innerHTML=''; const pList=Object.values(cleanPlayers); pList.sort((a,b)=>(a.id===currentUser.uid?-1:(b.id===currentUser.uid?1:0)));
+      renderBallButtons();
 
+      playersArea.innerHTML=''; const pList=Object.values(cleanPlayers); pList.sort((a,b)=>(a.id===currentUser.uid?-1:(b.id===currentUser.uid?1:0)));
       pList.forEach(p=>{
         const wrapper=document.createElement('div'); wrapper.className='p-3 rounded bg-slate-800 border border-slate-700';
         const header=document.createElement('div'); header.className='player-header mb-2';
@@ -426,32 +300,23 @@
           const cardEl=document.createElement('div'); cardEl.className='card';
           const isMine = currentUser && p.id===currentUser.uid;
           let rank;
-        const r = c.slice(1);
-          if (r==='A') rank = 1;
-          else if (r==='J') rank = 11;
-          else if (r==='Q') rank = 12;
-          else if (r==='K') rank = 13;
-          else rank = parseInt(r);
-          if(isMine && revealedNumbers.includes(rank)) cardEl.classList.add('marked');
+          const r = c.slice(1);
+          if (r==='A') rank = 1; else if (r==='J') rank = 11; else if (r==='Q') rank = 12; else if (r==='K') rank = 13; else rank = parseInt(r);
+          if(gameState.revealedNumbers && gameState.revealedNumbers.includes(rank)) cardEl.classList.add('marked');
           if(isMine){ cardEl.classList.add('card-face'); cardEl.textContent=c; cardEl.style.cursor='pointer'; cardEl.onclick=()=>markCard(p.id,c); if(c[0]==='♥'||c[0]==='♦') cardEl.classList.add('suit-red'); else cardEl.classList.add('suit-black'); }
-          else{
-            if(revealedNumbers.includes(rank)){ cardEl.classList.add('card-face'); cardEl.textContent=c; if(c[0]==='♥'||c[0]==='♦') cardEl.classList.add('suit-red'); else cardEl.classList.add('suit-black'); }
-            else{ cardEl.classList.add('card-back'); cardEl.textContent=' '; }
-          }
+          else{ if(gameState.revealedNumbers && gameState.revealedNumbers.includes(rank)){ cardEl.classList.add('card-face'); cardEl.textContent=c; if(c[0]==='♥'||c[0]==='♦') cardEl.classList.add('suit-red'); else cardEl.classList.add('suit-black'); } else{ cardEl.classList.add('card-back'); cardEl.textContent=' '; } }
           cardsRow.appendChild(cardEl);
         });
         wrapper.appendChild(cardsRow); playersArea.appendChild(wrapper);
       });
     }
 
-    // ---------- mark card ----------
     async function markCard(pid, cardCode){
       if(!currentUser || !gameState) return; if(!gameState.gameStarted){ setStatus('遊戲尚未開始'); return; }
       if(pid!==currentUser.uid){ setStatus('只能標記自己的卡'); return; }
       try{ await updateDoc(roomRef,{ [`players.${currentUser.uid}.marked`]: arrayUnion(cardCode), updatedAt: serverTimestamp() }); setStatus('已標記 '+cardCode); } catch(e){ log('mark err',e); setStatus('標記失敗：'+(e.message||e)); }
     }
 
-    // ---------- Foul draw ----------
     async function foulDrawFor(playerId){
       if(!currentUser) return;
       try{ await runTransaction(db, async tx=>{
@@ -464,9 +329,9 @@
       }); setStatus('犯規抽牌成功'); } catch(e){ log('foul draw err',e); setStatus('犯規抽牌失敗：'+(e.message||e)); }
     }
 
-            (async function () { await doAnonymousAuth(); renderBallButtons(); })();
-    </script>
+    (async function(){ await doAnonymousAuth(); })();
+  </script>
 </body>
-
 </html>
+
 
