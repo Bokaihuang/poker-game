@@ -40,17 +40,15 @@
     .ball-btn:hover { transform: translateY(-3px) scale(1.03); filter: brightness(1.06); }
     .ball-btn:active { transform: translateY(0) scale(0.98); }
 
-    /* 選中狀態 - **已修改** */
+    
     .ball-btn.selected {
-      border-color: #55CCFF; /* 粉藍色邊框 */
-      /* 調整陰影顏色，使其散發粉藍光暈 (RGB: 85, 204, 255) */
+      border-color: #55CCFF; 
       box-shadow: 0 8px 18px rgba(85,204,255,0.2), 0 0 8px rgba(85,204,255,0.3); 
       transform: scale(1.12);
       filter: brightness(1.08);
     }
 
-    /* 球顏色 - 已修改：1-7 號球恢復漸變，並使用更深的顏色 */
-    /* 9-13 號條紋球的主色 (pure color) 保持不變 */
+    
     .ball-yellow { 
         --ball-color-solid: #FFA500; 
         background: linear-gradient(180deg, #FFD75B, #FFA500); 
@@ -84,7 +82,7 @@
         background: linear-gradient(180deg, #995555, #663333); 
         color: white; 
     }
-    /* 8 號 (黑球) 保持原來的徑向漸變效果 */
+    
     .ball-black 	{ 
         --ball-color-solid: #000000; 
         background: radial-gradient(circle at 30% 30%, #3b3b3b, #000000 60%); 
@@ -92,7 +90,7 @@
         border-color: rgba(255,255,255,0.06); 
     } 
 
-    /* stripe 球 (9~13) - 繼續使用 --ball-color-solid 作為中間純色帶 */
+    
     .ball-stripe {
       background: linear-gradient(
           to bottom, 
@@ -222,7 +220,7 @@
     function buildDeck(){ const deck=[]; for(let r=1;r<=13;r++){ for(let s=0;s<4;s++){ const rank=rankMap[r]||String(r); deck.push({suit:suits[s], rank, code:`${suits[s]}${rank}`}); } } return deck; }
     function shuffle(arr){ for(let i=arr.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [arr[i],arr[j]]=[arr[j],arr[i]]; } return arr; }
 
-    // ---------- 圓形按鈕 ----------
+    
     function toggleNumber(n) {
       if(!gameState) return;
       const numbers = Array.isArray(gameState.revealedNumbers)?[...gameState.revealedNumbers]:[];
@@ -239,7 +237,7 @@
         
         btn.textContent = n; 
         
-        // 判斷顏色
+        
         if(n===1 || n===9) btn.classList.add('ball-yellow');
         else if(n===2 || n===10) btn.classList.add('ball-blue');
         else if(n===3 || n===11) btn.classList.add('ball-red');
@@ -249,7 +247,7 @@
         else if(n===7) btn.classList.add('ball-maroon');
         else if(n===8) btn.classList.add('ball-black');
 
-        // 9-13 號為條紋球，應用條紋樣式
+       
         if(n>=9 && n<=13){ 
             btn.classList.add('ball-stripe'); 
         }
