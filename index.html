@@ -1,4 +1,3 @@
-
 <!doctype html>
 <html lang="zh-TW">
 <head>
@@ -36,6 +35,7 @@
       box-shadow: 0 6px 12px rgba(2,6,23,0.6), inset 0 -6px 10px rgba(255,255,255,0.03);
       color: #071024;
       font-size: 14px;
+      position: relative; 
     }
     .ball-btn:hover { transform: translateY(-3px) scale(1.03); filter: brightness(1.06); }
     .ball-btn:active { transform: translateY(0) scale(0.98); }
@@ -48,29 +48,37 @@
       filter: brightness(1.08);
     }
 
-    /* 球顏色 */
-    .ball-yellow { background: linear-gradient(180deg, #fff59b, #f6d94d); }
-    .ball-blue   { background: linear-gradient(180deg, #9cc3ff, #2b7cff); color: white; }
-    .ball-red    { background: linear-gradient(180deg, #ff9b9b, #ff5252); color: white; }
-    .ball-purple { background: linear-gradient(180deg, #d6b3ff, #8d5cff); color: white; }
-    .ball-orange { background: linear-gradient(180deg, #ffd19a, #ff8c2b); }
-    .ball-green  { background: linear-gradient(180deg, #a9f0b8, #28c76f); color: black; }
-    .ball-maroon { background: linear-gradient(180deg, #c08989, #7a2f2f); color: white; }
-    .ball-black  { background: radial-gradient(circle at 30% 30%, #3b3b3b, #000000 60%); color: white; border-color: rgba(255,255,255,0.06); }
+    /* 球顏色 - 新增 --ball-color-solid 變數供條紋球使用 */
+    .ball-yellow { --ball-color-solid: #f6d94d; background: linear-gradient(180deg, #fff59b, #f6d94d); }
+    .ball-blue 	{ --ball-color-solid: #2b7cff; background: linear-gradient(180deg, #9cc3ff, #2b7cff); color: white; }
+    .ball-red 	 { --ball-color-solid: #ff5252; background: linear-gradient(180deg, #ff9b9b, #ff5252); color: white; }
+    .ball-purple { --ball-color-solid: #8d5cff; background: linear-gradient(180deg, #d6b3ff, #8d5cff); color: white; }
+    .ball-orange { --ball-color-solid: #ff8c2b; background: linear-gradient(180deg, #ffd19a, #ff8c2b); }
+    .ball-green 	{ --ball-color-solid: #28c76f; background: linear-gradient(180deg, #a9f0b8, #28c76f); color: black; }
+    .ball-maroon { --ball-color-solid: #7a2f2f; background: linear-gradient(180deg, #c08989, #7a2f2f); color: white; }
+    .ball-black 	{ --ball-color-solid: #000000; background: radial-gradient(circle at 30% 30%, #3b3b3b, #000000 60%); color: white; border-color: rgba(255,255,255,0.06); }
 
-    /* stripe 球 (9~13) */
+    /* stripe 球 (9~13) - **已修改：使用 linear-gradient 實現中間主色帶，上下白邊** */
     .ball-stripe {
-      position: relative;
-      overflow: visible;
-    }
-    .ball-stripe::before {
-      content:'';
-      position:absolute;
-      top:20%;
-      left:0; right:0;
-      height:60%;
-      border-radius:999px;
-      background: inherit; /* 繼承顏色 */
+      /* * 實現撞球條紋球樣式：
+       * 0% - 20% 白色 (上邊)
+       * 20% - 80% 主色 (中間色帶)
+       * 80% - 100% 白色 (下邊)
+       */
+      background: linear-gradient(
+          to bottom, 
+          white 0%, 
+          white 20%, 
+          var(--ball-color-solid) 20%, 
+          var(--ball-color-solid) 80%, 
+          white 80%, 
+          white 100%
+      );
+      /* 由於有白色邊緣，確保數字使用深色以保持對比度 */
+      color: #071024;
+      font-weight: 700;
+      overflow: hidden; 
+      /* 條紋球的陰影和過渡效果保持不變 */
     }
 
     @media (max-width:640px){ .ball-btn { width:34px; height:34px; font-size:13px; margin:3px; } }
@@ -199,16 +207,26 @@
     function renderBallButtons(){
       ballButtonsEl.innerHTML='';
       for(let n=1;n<=13;n++){
-        const btn=document.createElement('button'); btn.className='ball-btn'; btn.textContent=n;
-        if(n===1) btn.classList.add('ball-yellow');
-        else if(n===2) btn.classList.add('ball-blue');
-        else if(n===3) btn.classList.add('ball-red');
-        else if(n===4) btn.classList.add('ball-purple');
-        else if(n===5) btn.classList.add('ball-orange');
+        const btn=document.createElement('button'); 
+        btn.className='ball-btn'; 
+        
+        // **修改**：直接將數字設為按鈕的 textContent
+        btn.textContent = n; 
+        
+        // 判斷顏色
+        if(n===1 || n===9) btn.classList.add('ball-yellow');
+        else if(n===2 || n===10) btn.classList.add('ball-blue');
+        else if(n===3 || n===11) btn.classList.add('ball-red');
+        else if(n===4 || n===12) btn.classList.add('ball-purple');
+        else if(n===5 || n===13) btn.classList.add('ball-orange');
         else if(n===6) btn.classList.add('ball-green');
         else if(n===7) btn.classList.add('ball-maroon');
         else if(n===8) btn.classList.add('ball-black');
-        if(n>=9 && n<=13){ btn.classList.add('ball-stripe'); btn.classList.add({9:'ball-yellow',10:'ball-blue',11:'ball-red',12:'ball-purple',13:'ball-orange'}[n]); }
+
+        // 9-13 號為條紋球，應用條紋樣式
+        if(n>=9 && n<=13){ 
+            btn.classList.add('ball-stripe'); 
+        }
 
         if(gameState.revealedNumbers && gameState.revealedNumbers.includes(n)) btn.classList.add('selected');
 
@@ -334,5 +352,3 @@
   </script>
 </body>
 </html>
-
-
