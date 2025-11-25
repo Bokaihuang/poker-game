@@ -1,213 +1,387 @@
-<!DOCTYPE html>
-<html lang="zh-Hant">
+<!doctype html>
+<html lang="zh-TW">
 <head>
-<meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Pool Poker Game</title>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>Pool Poker — main-room</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body { background:#071024; color:#e6eef8; font-family: Inter, system-ui, -apple-system, "Segoe UI", Roboto, Arial; }
+    .card { width:54px; height:74px; border-radius:8px; display:flex;align-items:center;justify-content:center;font-weight:700;box-shadow:0 6px 16px rgba(0,0,0,.6); }
+    .card-back { background:linear-gradient(180deg,#0b1220,#081228); border:2px solid rgba(255,255,255,.04); color:transparent; }
+    .card-face { background:white; color:#071024; border:2px solid rgba(2,6,23,.06); }
+    .marked { outline:3px solid #f59e0b; transform:scale(1.05); }
+    .small { font-size:.85rem; color:#cfe8ff; }
+    .suit-red { color:#dc2626; }
+    .suit-black { color:#111827; }
+    .foul-btn { background:#ef4444; color:white; padding:6px 8px; border-radius:6px; font-weight:600; cursor:pointer; border:none; }
+    .foul-btn[disabled] { opacity:0.5; cursor:not-allowed; }
+    .player-header { display:flex; gap:8px; align-items:center; justify-content:space-between; }
 
-<style>
-/* ====== 基本布局 ====== */
-body {
-    font-family: Arial, sans-serif;
-    background: #222;
-    color: #eee;
-    padding: 20px;
-}
-#table {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 10px;
-    margin-bottom: 20px;
-}
+    /* ===== 球按鈕 美化 ===== */
+    .ball-btn {
+      width:40px;
+      height:40px;
+      border-radius:50%;
+      font-weight:700;
+      cursor:pointer;
+      border: 2px solid transparent;            /* 預設無框 */
+      display:inline-flex;
+      align-items:center;
+      justify-content:center;
+      margin:4px;
+      user-select:none;
+      transition: transform 160ms ease, box-shadow 160ms ease, border-color 160ms ease, filter 160ms ease;
+      box-shadow: 0 6px 12px rgba(2,6,23,0.6), inset 0 -6px 10px rgba(255,255,255,0.03);
+      color: #071024; /* 預設文字深色，會針對黑球覆寫為白 */
+      font-size: 14px;
+    }
 
-/* ====== 撞球按鈕 ====== */
-.ball-btn {
-    width: 48px;
-    height: 48px;
-    border-radius: 50%;
-    font-weight: bold;
-    cursor: pointer;
-    border: 3px solid #fff;
-    position: relative;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    color: black;
-    background: #f0f0f0;
-}
+    /* 輕微 hover / focus 效果 */
+    .ball-btn:hover {
+      transform: translateY(-3px) scale(1.03);
+      filter: brightness(1.06);
+    }
+    .ball-btn:active {
+      transform: translateY(0) scale(0.98);
+    }
 
-/* 文字在最上層 */
-.ball-btn span {
-    position: relative;
-    z-index: 3;
-}
+    /* 選中狀態：白框 + 光暈 + 放大 */
+    .ball-btn.selected {
+      border-color: #ffffff;
+      box-shadow: 0 8px 18px rgba(255,255,255,0.08), 0 0 8px rgba(255,255,255,0.12);
+      transform: scale(1.12);
+      filter: brightness(1.08);
+    }
 
-/* ====== 條紋球（1、9~15） ====== */
-.ball-btn.stripe::before {
-    content: "";
-    position: absolute;
-    width: 80%;
-    height: 30%;
-    background: rgba(255,255,255,0.9);
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    z-index: 1;
-    border-radius: 6px;
-}
+    /* 顏色微調（讓淺色球邊緣略有陰影） */
+    .ball-yellow { background: linear-gradient(180deg, #fff59b, #f6d94d); }
+    .ball-blue   { background: linear-gradient(180deg, #9cc3ff, #2b7cff); color: white; }
+    .ball-red    { background: linear-gradient(180deg, #ff9b9b, #ff5252); color: white; }
+    .ball-purple { background: linear-gradient(180deg, #d6b3ff, #8d5cff); color: white; }
+    .ball-orange { background: linear-gradient(180deg, #ffd19a, #ff8c2b); }
+    .ball-green  { background: linear-gradient(180deg, #a9f0b8, #28c76f); color: black; }
+    .ball-maroon { background: linear-gradient(180deg, #c08989, #7a2f2f); color: white; }
+    .ball-black  { background: radial-gradient(circle at 30% 30%, #3b3b3b, #000000 60%); color: white; border-color: rgba(255,255,255,0.06); }
 
-/* 彩色外圈（球本身顏色） */
-.ball-btn.stripe::after {
-    content: "";
-    position: absolute;
-    inset: 0;
-    border-radius: 50%;
-    z-index: 0;
-    border: 12px solid currentColor;
-    box-sizing: border-box;
-}
+    /* 小號碼字（使 1 / 9 的白邊好看） */
+    .ball-stripe {
+      position: relative;
+      overflow: visible;
+    }
+    /* 為 stripe 球（9~13 的外圈效果可以透過 outline 模擬） */
+    .ball-stripe::after {
+      content: '';
+      position: absolute;
+      inset: -4px;
+      border-radius: 50%;
+      pointer-events: none;
+      border: 3px solid rgba(255,255,255,0.06);
+    }
 
-/* ====== 選取狀態 ====== */
-.ball-btn.selected {
-    box-shadow: 0 0 0 4px white;
-}
+    /* 方便在手機/小螢幕時球稍微縮小 */
+    @media (max-width:640px){
+      .ball-btn { width:34px; height:34px; font-size:13px; margin:3px; }
+    }
 
-/* ====== 玩家牌區 ====== */
-.card {
-    width: 40px;
-    height: 60px;
-    background: white;
-    border: 2px solid #000;
-    border-radius: 6px;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    color: black;
-    margin: 4px;
-}
-.highlight {
-    border-color: yellow;
-    box-shadow: 0 0 10px yellow;
-}
-</style>
+    /* 原先的 active class 保留向後相容（但我們用 .selected） */
+    .ball-btn.active { opacity:0.7; }
+    /* ====================== */
 
+  </style>
 </head>
 <body>
+  <div class="max-w-5xl mx-auto p-6">
+    <h1 class="text-2xl font-bold mb-4">Pool Poker — main-room</h1>
 
-<h2>Pool Poker Game</h2>
+    <div id="status" class="mb-4 text-sm small">初始化中…</div>
 
-<!-- 撞球按鈕區 -->
-<div id="table"></div>
+    <div id="joinPanel" class="mb-6 grid grid-cols-1 sm:grid-cols-3 gap-3">
+      <div class="col-span-2">
+        <label class="small">暱稱</label>
+        <input id="nickname" class="w-full p-2 rounded bg-slate-800 border border-slate-700" placeholder="輸入暱稱" />
+      </div>
+      <div>
+        <button id="btnJoin" class="w-full py-2 rounded bg-emerald-600 hover:bg-emerald-500">加入房間</button>
+      </div>
+    </div>
 
-<!-- 玩家牌 -->
-<div>
-    <h3>你的牌：</h3>
-    <div id="myCards" style="display:flex;"></div>
-</div>
+    <div id="roomPanel" class="mb-6 p-4 rounded bg-slate-900 border border-slate-700 hidden">
+      <div class="flex items-center justify-between mb-3">
+        <div><div class="text-xs small">房間 ID</div><div class="font-mono">main-room</div></div>
+        <div><div class="text-xs small">房主</div><div id="roomOwner" class="font-bold">—</div></div>
+        <div><div class="text-xs small">人數</div><div id="roomCount">0 / 5</div></div>
+        <div><div class="text-xs small">我的暱稱</div><div id="myNick" class="font-mono">—</div></div>
+      </div>
 
-<!-- 重發牌 -->
-<button id="resetBtn">重新發牌</button>
+      <div class="flex gap-2 items-center mb-4">
+        <button id="btnStart" class="px-3 py-2 rounded bg-yellow-600 hover:bg-yellow-500 hidden">發牌（房主）</button>
+        <button id="btnRestart" class="px-3 py-2 rounded bg-slate-700 hover:bg-slate-600 hidden">重開（房主）</button>
+        <button id="btnLeave" class="px-3 py-2 rounded bg-red-600 hover:bg-red-500 ml-auto">退出房間</button>
+        <div id="notice" class="ml-4 small text-slate-300"></div>
+      </div>
 
-<!-- Firebase + Game Logic -->
-<script type="module">
-import { initializeApp } from "https://www.gstatic.com/firebasejs/10.11.1/firebase-app.js";
-import { getFirestore, doc, setDoc, getDoc, updateDoc } from "https://www.gstatic.com/firebasejs/10.11.1/firebase-firestore.js";
+      <!-- 球按鈕 -->
+      <div id="ballButtons" class="mb-4"></div>
 
-/* ====== Firebase config（你提供的） ====== */
-const firebaseConfig = {
-    apiKey: "AIzaSyCk54DEp6rzvpfQBBNW_iJByZ3boyHEPF0",
-    authDomain: "poolpokergame-b88ed.firebaseapp.com",
-    projectId: "poolpokergame-b88ed",
-    storageBucket: "poolpokergame-b88ed.firebasestorage.app",
-    messagingSenderId: "574863840102",
-    appId: "1:574863840102:web:14368aaf84b3640c6eeea7"
-};
+      <div id="playersArea" class="grid grid-cols-1 md:grid-cols-2 gap-4"></div>
+    </div>
 
-const app = initializeApp(firebaseConfig);
-const db = getFirestore(app);
+    <div id="debug" class="mt-6 p-3 rounded bg-slate-900 border border-slate-700 text-xs small">
+      <div><strong>Debug (console)</strong></div>
+      <pre id="log" class="text-xs mt-2"></pre>
+    </div>
+  </div>
 
-/* ====== HTML DOM ====== */
-const table = document.getElementById("table");
-const myCardsDiv = document.getElementById("myCards");
-const resetBtn = document.getElementById("resetBtn");
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+    import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+    import {
+      getFirestore, doc, onSnapshot, setDoc, updateDoc, getDoc,
+      deleteDoc, serverTimestamp, arrayUnion, deleteField, runTransaction
+    } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
-/* ====== 測試用：給你固定的手牌 ====== */
-let myCards = ["H11", "D12", "S13", "C7", "H3"]; // J,Q,K,7,3
+    const EXTERNAL_FIREBASE_CONFIG = {
+      apiKey: "AIzaSyCk54DEp6rzvpfQBBNW_iJByZ3boyHEPF0",
+      authDomain: "poolpokergame-b88ed.firebaseapp.com",
+      projectId: "poolpokergame-b88ed",
+      storageBucket: "poolpokergame-b88ed.firebasestorage.app",
+      messagingSenderId: "574863840102",
+      appId: "1:574863840102:web:14368aaf84b3640c6eeea7"
+    };
 
-/* ====== 初始化顯示手牌 ====== */
-function renderMyCards(highlightRank = null) {
-    myCardsDiv.innerHTML = "";
-    myCards.forEach(c => {
-        const rank = parseInt(c.slice(1));
-        const div = document.createElement("div");
-        div.className = "card";
-        if (highlightRank !== null && highlightRank === rank) {
-            div.classList.add("highlight");
-        }
-        div.textContent = c;
-        myCardsDiv.appendChild(div);
-    });
-}
+    const APP_ID = EXTERNAL_FIREBASE_CONFIG.projectId;
+    const ROOM_PATH = `artifacts/${APP_ID}/public/data/pool_poker_rooms/main_room`;
+    const CARDS_PER_PLAYER = 8;
+    const MAX_PLAYERS = 5;
+    const MAX_EXTRA = 6;
 
-/* ====== Toggle number highlight ====== */
-function toggleNumber(n) {
-    renderMyCards(n);
-}
+    const statusEl = document.getElementById('status');
+    const logEl = document.getElementById('log');
+    const nicknameInput = document.getElementById('nickname');
+    const btnJoin = document.getElementById('btnJoin');
+    const joinPanel = document.getElementById('joinPanel');
+    const roomPanel = document.getElementById('roomPanel');
+    const roomOwnerEl = document.getElementById('roomOwner');
+    const roomCountEl = document.getElementById('roomCount');
+    const playersArea = document.getElementById('playersArea');
+    const myNickEl = document.getElementById('myNick');
+    const btnStart = document.getElementById('btnStart');
+    const btnRestart = document.getElementById('btnRestart');
+    const btnLeave = document.getElementById('btnLeave');
+    const noticeEl = document.getElementById('notice');
+    const ballButtonsEl = document.getElementById('ballButtons');
 
-/* ====== 建立撞球按鈕 ====== */
-function renderBalls() {
-    table.innerHTML = "";
+    const app = initializeApp(EXTERNAL_FIREBASE_CONFIG);
+    const auth = getAuth(app);
+    const db = getFirestore(app);
+    const roomRef = doc(db, ROOM_PATH);
 
-    for (let n = 1; n <= 15; n++) {
-        const btn = document.createElement("button");
-        btn.className = "ball-btn";
-        btn.innerHTML = `<span>${n}</span>`;
+    let currentUser = null;
+    let gameState = null;
+    let myNickname = '';
+    let revealedNumbers = [];
 
-        /* 條紋球外觀：1、9~15 */
-        if ([1,9,10,11,12,13,14,15].includes(n)) {
-            btn.classList.add("stripe");
-        }
+    function log(...args){ console.log(...args); logEl.textContent += args.map(a=>typeof a==='object'?JSON.stringify(a):String(a)).join(' ')+'\n'; logEl.scrollTop = logEl.scrollHeight;}
+    function setStatus(s){ statusEl.textContent = s; }
 
-        /* 顏色設定（使用 currentColor） */
-        const colorMap = {
-            1: "#fdd835",
-            2: "#1976d2",
-            3: "#d32f2f",
-            4: "#7b1fa2",
-            5: "#ff9800",
-            6: "#388e3c",
-            7: "#5d4037",
-            8: "#000000",
-            9: "#1976d2",
-            10: "#d32f2f",
-            11: "#7b1fa2",
-            12: "#ff9800",
-            13: "#388e3c",
-            14: "#5d4037",
-            15: "#d32f2f"
-        };
-        btn.style.color = colorMap[n];
-
-        /* 點擊行為 */
-        btn.onclick = () => {
-            btn.classList.toggle("selected");
-            toggleNumber(n);
-        };
-
-        table.appendChild(btn);
+    async function doAnonymousAuth(){
+      setStatus('使用匿名登入 Firebase...');
+      try{ const cred=await signInAnonymously(auth); log('signed in uid=', cred.user.uid); } 
+      catch(e){ log('auth failed', e); setStatus('Auth 失敗'); }
     }
-}
 
-/* ====== 重發牌：清除選取 ====== */
-resetBtn.onclick = () => {
-    document.querySelectorAll(".ball-btn").forEach(b => b.classList.remove("selected"));
-    renderMyCards(null);
-};
+    onAuthStateChanged(auth,(user)=>{ currentUser=user; if(user){ setStatus('已登入：'+user.uid); subscribeRoom(); } else { setStatus('未登入'); } });
 
-/* ====== 初始渲染 ====== */
-renderBalls();
-renderMyCards();
-</script>
+    let unsubscribe=null;
+    function subscribeRoom(){
+      if(unsubscribe) return;
+      setStatus('訂閱 main-room...');
+      unsubscribe = onSnapshot(roomRef,(snap)=>{
+        if(!snap.exists()){ gameState=null; renderUI(); setStatus('房間尚未建立或已被清空'); return; }
+        gameState = snap.data(); renderUI(); setStatus('已連到房間');
+      }, (err)=>{ log('snapshot err',err); setStatus('訂閱失敗'); });
+    }
 
+    const suits=['♣','♦','♥','♠'];
+    const rankMap={1:'A',11:'J',12:'Q',13:'K'};
+    function buildDeck(){ const deck=[]; for(let r=1;r<=13;r++){ for(let s=0;s<4;s++){ const rank=rankMap[r]||String(r); deck.push({suit:suits[s], rank, code:`${suits[s]}${rank}`}); } } return deck; }
+    function shuffle(arr){ for(let i=arr.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [arr[i],arr[j]]=[arr[j],arr[i]]; } return arr; }
+
+    // ---------- 圓形按鈕 (美化 + selected class) ----------
+    function toggleNumber(n) {
+      const idx = revealedNumbers.indexOf(n);
+      if (idx >= 0) revealedNumbers.splice(idx, 1);
+      else revealedNumbers.push(n);
+    }
+
+    function renderBallButtons(){
+      ballButtonsEl.innerHTML='';
+      for(let n=1;n<=13;n++){
+        const btn=document.createElement('button');
+        btn.className='ball-btn';
+        btn.textContent=n;
+
+        // 顏色對應撞球（套用 CSS 範本 class）
+        // 使用 class 而非直接 style 讓外觀一致
+        if(n===1||n===9) { btn.classList.add('ball-yellow'); }
+        else if(n===2||n===10) { btn.classList.add('ball-blue'); }
+        else if(n===3||n===11) { btn.classList.add('ball-red'); }
+        else if(n===4||n===12) { btn.classList.add('ball-purple'); }
+        else if(n===5||n===13) { btn.classList.add('ball-orange'); }
+        else if(n===6) { btn.classList.add('ball-green'); }
+        else if(n===7) { btn.classList.add('ball-maroon'); }
+        else if(n===8) { btn.classList.add('ball-black'); }
+
+        // 如果是 stripe 類型（9-13）我給一個細微外圈效果
+        if (n >= 9 && n <= 13) {
+          btn.classList.add('ball-stripe');
+        }
+
+        // 若已被選取，套用 selected
+        if (revealedNumbers.includes(n)) {
+          btn.classList.add('selected');
+        }
+
+        // 文字顏色補強（黑底球）
+        if (n === 8) btn.style.color = 'white';
+
+        // 按下切換 revealedNumbers，並重新 render 牌區與按鈕（保持同步）
+        btn.onclick = () => {
+          toggleNumber(n);
+          // 重新 render 牌區（會參照 revealedNumbers）
+          renderUI();
+          // 重新 render 按鈕以確保 selected 對齊
+          renderBallButtons();
+        };
+
+        ballButtonsEl.appendChild(btn);
+      }
+    }
+
+    // ---------- Join / Leave / Start / Restart ----------
+    btnJoin.addEventListener('click', async()=>{
+      if(!currentUser) { setStatus('尚未登入'); return; }
+      const nickInput=(nicknameInput.value||'').trim(); if(!nickInput){ setStatus('請先輸入暱稱'); return; }
+      const isKai = nickInput==='kai';
+      try{
+        const snap=await getDoc(roomRef);
+        if(!snap.exists()){
+          const players={}; players[currentUser.uid]={id:currentUser.uid, nickname:isKai?'kai':nickInput, cards:[], marked:[]};
+          const docData={ players, gameStarted:false, notice:isKai?'房主 kai 已建立房間':'房間已建立', updatedAt:serverTimestamp(), deck:[] };
+          if(isKai) docData.creatorId=currentUser.uid; await setDoc(roomRef,docData);
+          myNickname=isKai?'kai':nickInput; nicknameInput.value=isKai?'':nickInput; setStatus(isKai?'已以 kai 建立房間':'房間建立'); return;
+        } else {
+          const data=snap.data(); const players=data.players||{};
+          const realCount=Object.values(players).filter(p=>p&&p.id).length; if(realCount>=MAX_PLAYERS){ setStatus('房間已滿'); return; }
+          if(players[currentUser.uid]&&players[currentUser.uid].id){ setStatus('您已在房間中'); return; }
+          const updateObj={ updatedAt:serverTimestamp() };
+          updateObj[`players.${currentUser.uid}`]={id:currentUser.uid, nickname:isKai?'kai':nickInput, cards:[], marked:[]};
+          if(isKai){ updateObj['creatorId']=currentUser.uid; updateObj['notice']='kai 已成為房主'; myNickname='kai'; nicknameInput.value=''; } else { myNickname=nickInput; }
+          await updateDoc(roomRef,updateObj); setStatus('已加入房間');
+        }
+      } catch(e){ log('join err',e); setStatus('加入失敗'); }
+    });
+
+    btnLeave.addEventListener('click', async()=>{ if(!currentUser) return; try{ if(gameState.creatorId===currentUser.uid&&myNickname==='kai'){ await deleteDoc(roomRef); setStatus('房主已退出'); return; } await updateDoc(roomRef,{ [`players.${currentUser.uid}`]:deleteField(), updatedAt:serverTimestamp() }); setStatus('已退出房間'); myNickname=''; } catch(e){ log('leave err',e); setStatus('退出失敗'); } });
+
+    btnStart.addEventListener('click', async()=>{
+      if(!currentUser||!gameState) return; if(gameState.creatorId!==currentUser.uid||myNickname!=='kai'){ setStatus('只有 kai 房主可以發牌'); return; }
+      try{
+        const players=gameState.players||{}; const pids=Object.keys(players).filter(k=>players[k]&&players[k].id);
+        let deckObj=buildDeck().map(c=>c.code); shuffle(deckObj);
+        const updateObj={gameStarted:true, notice:'遊戲開始：已發牌', updatedAt:serverTimestamp()};
+        pids.forEach((pid,idx)=>{ const start=idx*CARDS_PER_PLAYER; const hand=deckObj.slice(start,start+CARDS_PER_PLAYER); updateObj[`players.${pid}.cards`]=hand; updateObj[`players.${pid}.marked`]=[]; });
+        updateObj['deck']=deckObj.slice(pids.length*CARDS_PER_PLAYER); await updateDoc(roomRef,updateObj);
+        revealedNumbers=[]; renderBallButtons(); setStatus('發牌完成');
+      } catch(e){ log('start err',e); setStatus('發牌失敗'); }
+    });
+
+    btnRestart.addEventListener('click', async()=>{
+      if(!currentUser||!gameState) return; if(gameState.creatorId!==currentUser.uid||myNickname!=='kai'){ setStatus('只有 kai 房主可以重開'); return; }
+      try{
+        const players=gameState.players||{}; const updateObj={ gameStarted:false, notice:'房主已重開遊戲', updatedAt:serverTimestamp() };
+        Object.keys(players).forEach(pid=>{ if(players[pid]&&players[pid].id){ updateObj[`players.${pid}.cards`]=[]; updateObj[`players.${pid}.marked`]=[]; } });
+        updateObj['deck']=[]; await updateDoc(roomRef,updateObj);
+        revealedNumbers=[]; renderBallButtons(); setStatus('已重開');
+      } catch(e){ log('restart err',e); setStatus('重開失敗'); }
+    });
+
+    // ---------- Render UI ----------
+    function renderUI(){
+      const players=(gameState&&gameState.players)?gameState.players:{};
+      const cleanPlayers={}; Object.keys(players).forEach(k=>{ if(players[k]&&players[k].id) cleanPlayers[k]=players[k]; });
+      if(!gameState){ joinPanel.classList.remove('hidden'); roomPanel.classList.add('hidden'); myNickEl.textContent='—'; return; }
+
+      const amInRoom=currentUser&&cleanPlayers[currentUser.uid];
+      if(!amInRoom){ joinPanel.classList.remove('hidden'); roomPanel.classList.add('hidden'); roomOwnerEl.textContent=cleanPlayers[gameState.creatorId]?.nickname||'—'; roomCountEl.textContent=`${Object.keys(cleanPlayers).length} / ${MAX_PLAYERS}`; return; }
+
+      joinPanel.classList.add('hidden'); roomPanel.classList.remove('hidden'); myNickname=cleanPlayers[currentUser.uid].nickname||myNickname; myNickEl.textContent=myNickname;
+      const ownerNick=cleanPlayers[gameState.creatorId]?.nickname||'—'; roomOwnerEl.textContent=ownerNick; roomCountEl.textContent=`${Object.keys(cleanPlayers).length} / ${MAX_PLAYERS}`; noticeEl.textContent=gameState.notice||'';
+
+      const amHost=gameState.creatorId===currentUser.uid && myNickname==='kai';
+      if(amHost){ btnStart.classList.remove('hidden'); btnRestart.classList.remove('hidden'); } else { btnStart.classList.add('hidden'); btnRestart.classList.add('hidden'); }
+
+      playersArea.innerHTML=''; const pList=Object.values(cleanPlayers); pList.sort((a,b)=>(a.id===currentUser.uid?-1:(b.id===currentUser.uid?1:0)));
+
+      pList.forEach(p=>{
+        const wrapper=document.createElement('div'); wrapper.className='p-3 rounded bg-slate-800 border border-slate-700';
+        const header=document.createElement('div'); header.className='player-header mb-2';
+        const left=document.createElement('div'); left.innerHTML=`<strong>${p.nickname||('p_'+p.id.slice(0,6))}</strong> ${p.id===currentUser.uid?'<span class="small"> (您)</span>':''}`;
+        const right=document.createElement('div'); right.style.display='flex'; right.style.gap='8px'; right.style.alignItems='center';
+        const countSpan=document.createElement('div'); countSpan.className='small'; countSpan.textContent=`牌 ${(p.cards||[]).length} / ${CARDS_PER_PLAYER+MAX_EXTRA}`;
+        const foulBtn=document.createElement('button'); foulBtn.className='foul-btn'; foulBtn.textContent='犯規 +1';
+        const deckLen=(gameState.deck||[]).length;
+        foulBtn.disabled=!currentUser||currentUser.uid!==gameState.creatorId||deckLen===0; foulBtn.onclick=()=>{ if(!currentUser||currentUser.uid!==gameState.creatorId){ alert('您只能為自己按犯規（請切換到該玩家的帳號）'); return; } foulDrawFor(p.id); };
+
+        right.appendChild(countSpan); right.appendChild(foulBtn); header.appendChild(left); header.appendChild(right); wrapper.appendChild(header);
+
+        const cardsRow=document.createElement('div'); cardsRow.className='flex gap-2 flex-wrap';
+        const cards=p.cards||[];
+        cards.forEach(c=>{
+          const cardEl=document.createElement('div'); cardEl.className='card';
+          const isMine = currentUser && p.id===currentUser.uid;
+          let rank;
+        const r = c.slice(1);
+          if (r==='A') rank = 1;
+          else if (r==='J') rank = 11;
+          else if (r==='Q') rank = 12;
+          else if (r==='K') rank = 13;
+          else rank = parseInt(r);
+          if(isMine && revealedNumbers.includes(rank)) cardEl.classList.add('marked');
+          if(isMine){ cardEl.classList.add('card-face'); cardEl.textContent=c; cardEl.style.cursor='pointer'; cardEl.onclick=()=>markCard(p.id,c); if(c[0]==='♥'||c[0]==='♦') cardEl.classList.add('suit-red'); else cardEl.classList.add('suit-black'); }
+          else{
+            if(revealedNumbers.includes(rank)){ cardEl.classList.add('card-face'); cardEl.textContent=c; if(c[0]==='♥'||c[0]==='♦') cardEl.classList.add('suit-red'); else cardEl.classList.add('suit-black'); }
+            else{ cardEl.classList.add('card-back'); cardEl.textContent=' '; }
+          }
+          cardsRow.appendChild(cardEl);
+        });
+        wrapper.appendChild(cardsRow); playersArea.appendChild(wrapper);
+      });
+    }
+
+    // ---------- mark card ----------
+    async function markCard(pid, cardCode){
+      if(!currentUser || !gameState) return; if(!gameState.gameStarted){ setStatus('遊戲尚未開始'); return; }
+      if(pid!==currentUser.uid){ setStatus('只能標記自己的卡'); return; }
+      try{ await updateDoc(roomRef,{ [`players.${currentUser.uid}.marked`]: arrayUnion(cardCode), updatedAt: serverTimestamp() }); setStatus('已標記 '+cardCode); } catch(e){ log('mark err',e); setStatus('標記失敗：'+(e.message||e)); }
+    }
+
+    // ---------- Foul draw ----------
+    async function foulDrawFor(playerId){
+      if(!currentUser) return;
+      try{ await runTransaction(db, async tx=>{
+        const snap=await tx.get(roomRef); if(!snap.exists()) throw new Error('房間不存在'); const data=snap.data();
+        const deck=Array.isArray(data.deck)?[...data.deck]:[]; const players=data.players||{}; const target=players[playerId];
+        if(!target||!target.id) throw new Error('玩家不存在'); const currentCount=Array.isArray(target.cards)?target.cards.length:0;
+        if(currentCount>=CARDS_PER_PLAYER+MAX_EXTRA) throw new Error('此玩家已達最多 14 張（不能再抽）'); if(deck.length===0) throw new Error('剩餘牌已經抽完');
+        const drawn=deck.pop(); const newPlayers={ ...players, [playerId]:{ ...target, cards:[...(target.cards||[]), drawn] } };
+        tx.update(roomRef, { players:newPlayers, deck:deck, updatedAt:serverTimestamp() });
+      }); setStatus('犯規抽牌成功'); } catch(e){ log('foul draw err',e); setStatus('犯規抽牌失敗：'+(e.message||e)); }
+    }
+
+    (async function(){ await doAnonymousAuth(); })();
+  </script>
 </body>
 </html>
+
