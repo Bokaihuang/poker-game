@@ -1,3 +1,5 @@
+
+
 <!doctype html>
 <html lang="zh-TW">
 <head>
@@ -17,8 +19,77 @@
     .foul-btn { background:#ef4444; color:white; padding:6px 8px; border-radius:6px; font-weight:600; cursor:pointer; border:none; }
     .foul-btn[disabled] { opacity:0.5; cursor:not-allowed; }
     .player-header { display:flex; gap:8px; align-items:center; justify-content:space-between; }
-    .ball-btn { width:32px; height:32px; border-radius:50%; font-weight:600; color:#071024; cursor:pointer; border:none; display:inline-flex; align-items:center; justify-content:center; margin:2px; }
-    .ball-btn.active { opacity:0.5; }
+
+    /* ===== 球按鈕 美化 ===== */
+    .ball-btn {
+      width:40px;
+      height:40px;
+      border-radius:50%;
+      font-weight:700;
+      cursor:pointer;
+      border: 2px solid transparent;            /* 預設無框 */
+      display:inline-flex;
+      align-items:center;
+      justify-content:center;
+      margin:4px;
+      user-select:none;
+      transition: transform 160ms ease, box-shadow 160ms ease, border-color 160ms ease, filter 160ms ease;
+      box-shadow: 0 6px 12px rgba(2,6,23,0.6), inset 0 -6px 10px rgba(255,255,255,0.03);
+      color: #071024; /* 預設文字深色，會針對黑球覆寫為白 */
+      font-size: 14px;
+    }
+
+    /* 輕微 hover / focus 效果 */
+    .ball-btn:hover {
+      transform: translateY(-3px) scale(1.03);
+      filter: brightness(1.06);
+    }
+    .ball-btn:active {
+      transform: translateY(0) scale(0.98);
+    }
+
+    /* 選中狀態：白框 + 光暈 + 放大 */
+    .ball-btn.selected {
+      border-color: #ffffff;
+      box-shadow: 0 8px 18px rgba(255,255,255,0.08), 0 0 8px rgba(255,255,255,0.12);
+      transform: scale(1.12);
+      filter: brightness(1.08);
+    }
+
+    /* 顏色微調（讓淺色球邊緣略有陰影） */
+    .ball-yellow { background: linear-gradient(180deg, #fff59b, #f6d94d); }
+    .ball-blue   { background: linear-gradient(180deg, #9cc3ff, #2b7cff); color: white; }
+    .ball-red    { background: linear-gradient(180deg, #ff9b9b, #ff5252); color: white; }
+    .ball-purple { background: linear-gradient(180deg, #d6b3ff, #8d5cff); color: white; }
+    .ball-orange { background: linear-gradient(180deg, #ffd19a, #ff8c2b); }
+    .ball-green  { background: linear-gradient(180deg, #a9f0b8, #28c76f); color: black; }
+    .ball-maroon { background: linear-gradient(180deg, #c08989, #7a2f2f); color: white; }
+    .ball-black  { background: radial-gradient(circle at 30% 30%, #3b3b3b, #000000 60%); color: white; border-color: rgba(255,255,255,0.06); }
+
+    /* 小號碼字（使 1 / 9 的白邊好看） */
+    .ball-stripe {
+      position: relative;
+      overflow: visible;
+    }
+    /* 為 stripe 球（9~13 的外圈效果可以透過 outline 模擬） */
+    .ball-stripe::after {
+      content: '';
+      position: absolute;
+      inset: -4px;
+      border-radius: 50%;
+      pointer-events: none;
+      border: 3px solid rgba(255,255,255,0.06);
+    }
+
+    /* 方便在手機/小螢幕時球稍微縮小 */
+    @media (max-width:640px){
+      .ball-btn { width:34px; height:34px; font-size:13px; margin:3px; }
+    }
+
+    /* 原先的 active class 保留向後相容（但我們用 .selected） */
+    .ball-btn.active { opacity:0.7; }
+    /* ====================== */
+
   </style>
 </head>
 <body>
@@ -139,23 +210,53 @@
     function buildDeck(){ const deck=[]; for(let r=1;r<=13;r++){ for(let s=0;s<4;s++){ const rank=rankMap[r]||String(r); deck.push({suit:suits[s], rank, code:`${suits[s]}${rank}`}); } } return deck; }
     function shuffle(arr){ for(let i=arr.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [arr[i],arr[j]]=[arr[j],arr[i]]; } return arr; }
 
-    // ---------- 圓形按鈕 ----------
+    // ---------- 圓形按鈕 (美化 + selected class) ----------
+    function toggleNumber(n) {
+      const idx = revealedNumbers.indexOf(n);
+      if (idx >= 0) revealedNumbers.splice(idx, 1);
+      else revealedNumbers.push(n);
+    }
+
     function renderBallButtons(){
       ballButtonsEl.innerHTML='';
       for(let n=1;n<=13;n++){
-        const btn=document.createElement('button'); btn.className='ball-btn';
+        const btn=document.createElement('button');
+        btn.className='ball-btn';
         btn.textContent=n;
-        // 顏色對應撞球
-        if(n===1||n===9) btn.style.background='yellow';
-        else if(n===2||n===10) btn.style.background='blue';
-        else if(n===3||n===11) btn.style.background='red';
-        else if(n===4||n===12) btn.style.background='purple';
-        else if(n===5||n===13) btn.style.background='orange';
-        else if(n===6) btn.style.background='green';
-        else if(n===7) btn.style.background='maroon';
-        else if(n===8) btn.style.background='black'; btn.style.color=(n===8)?'white':'#071024';
-        if(revealedNumbers.includes(n)) btn.classList.add('active');
-        btn.onclick=()=>{ const idx=revealedNumbers.indexOf(n); if(idx>=0) revealedNumbers.splice(idx,1); else revealedNumbers.push(n); renderUI(); renderBallButtons(); };
+
+        // 顏色對應撞球（套用 CSS 範本 class）
+        // 使用 class 而非直接 style 讓外觀一致
+        if(n===1||n===9) { btn.classList.add('ball-yellow'); }
+        else if(n===2||n===10) { btn.classList.add('ball-blue'); }
+        else if(n===3||n===11) { btn.classList.add('ball-red'); }
+        else if(n===4||n===12) { btn.classList.add('ball-purple'); }
+        else if(n===5||n===13) { btn.classList.add('ball-orange'); }
+        else if(n===6) { btn.classList.add('ball-green'); }
+        else if(n===7) { btn.classList.add('ball-maroon'); }
+        else if(n===8) { btn.classList.add('ball-black'); }
+
+        // 如果是 stripe 類型（9-13）我給一個細微外圈效果
+        if (n >= 9 && n <= 13) {
+          btn.classList.add('ball-stripe');
+        }
+
+        // 若已被選取，套用 selected
+        if (revealedNumbers.includes(n)) {
+          btn.classList.add('selected');
+        }
+
+        // 文字顏色補強（黑底球）
+        if (n === 8) btn.style.color = 'white';
+
+        // 按下切換 revealedNumbers，並重新 render 牌區與按鈕（保持同步）
+        btn.onclick = () => {
+          toggleNumber(n);
+          // 重新 render 牌區（會參照 revealedNumbers）
+          renderUI();
+          // 重新 render 按鈕以確保 selected 對齊
+          renderBallButtons();
+        };
+
         ballButtonsEl.appendChild(btn);
       }
     }
@@ -285,4 +386,3 @@
   </script>
 </body>
 </html>
-
