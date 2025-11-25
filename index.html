@@ -263,7 +263,7 @@
     btnJoin.addEventListener('click', async()=>{
       if(!currentUser) { setStatus('尚未登入'); return; }
       const nickInput=(nicknameInput.value||'').trim(); if(!nickInput){ setStatus('請先輸入暱稱'); return; }
-      const isKai = nickInput==='kai';
+      const isKai = nickInput==='Kai';
       try{
         const snap=await getDoc(roomRef);
         if(!snap.exists()){
