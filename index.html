@@ -40,31 +40,60 @@
     .ball-btn:hover { transform: translateY(-3px) scale(1.03); filter: brightness(1.06); }
     .ball-btn:active { transform: translateY(0) scale(0.98); }
 
-    /* 選中狀態 */
+    /* 選中狀態 - **已修改** */
     .ball-btn.selected {
-      border-color: #facc15;
-      box-shadow: 0 8px 18px rgba(250,204,21,0.2), 0 0 8px rgba(250,204,21,0.3);
+      border-color: #55CCFF; /* 粉藍色邊框 */
+      /* 調整陰影顏色，使其散發粉藍光暈 (RGB: 85, 204, 255) */
+      box-shadow: 0 8px 18px rgba(85,204,255,0.2), 0 0 8px rgba(85,204,255,0.3); 
       transform: scale(1.12);
       filter: brightness(1.08);
     }
 
-    /* 球顏色 - 新增 --ball-color-solid 變數供條紋球使用 */
-    .ball-yellow { --ball-color-solid: #f6d94d; background: linear-gradient(180deg, #fff59b, #f6d94d); }
-    .ball-blue 	{ --ball-color-solid: #2b7cff; background: linear-gradient(180deg, #9cc3ff, #2b7cff); color: white; }
-    .ball-red 	 { --ball-color-solid: #ff5252; background: linear-gradient(180deg, #ff9b9b, #ff5252); color: white; }
-    .ball-purple { --ball-color-solid: #8d5cff; background: linear-gradient(180deg, #d6b3ff, #8d5cff); color: white; }
-    .ball-orange { --ball-color-solid: #ff8c2b; background: linear-gradient(180deg, #ffd19a, #ff8c2b); }
-    .ball-green 	{ --ball-color-solid: #28c76f; background: linear-gradient(180deg, #a9f0b8, #28c76f); color: black; }
-    .ball-maroon { --ball-color-solid: #7a2f2f; background: linear-gradient(180deg, #c08989, #7a2f2f); color: white; }
-    .ball-black 	{ --ball-color-solid: #000000; background: radial-gradient(circle at 30% 30%, #3b3b3b, #000000 60%); color: white; border-color: rgba(255,255,255,0.06); }
+    /* 球顏色 - 已修改：1-7 號球恢復漸變，並使用更深的顏色 */
+    /* 9-13 號條紋球的主色 (pure color) 保持不變 */
+    .ball-yellow { 
+        --ball-color-solid: #FFA500; 
+        background: linear-gradient(180deg, #FFD75B, #FFA500); 
+    } 
+    .ball-blue 	{ 
+        --ball-color-solid: #0055AA; 
+        background: linear-gradient(180deg, #44AADD, #0055AA); 
+        color: white; 
+    }
+    .ball-red 	 { 
+        --ball-color-solid: #CC0000; 
+        background: linear-gradient(180deg, #FF5555, #CC0000); 
+        color: white; 
+    } 
+    .ball-purple { 
+        --ball-color-solid: #6633BB; 
+        background: linear-gradient(180deg, #AA88FF, #6633BB); 
+        color: white; 
+    } 
+    .ball-orange { 
+        --ball-color-solid: #DD6600; 
+        background: linear-gradient(180deg, #FFAA55, #DD6600); 
+    } 
+    .ball-green 	{ 
+        --ball-color-solid: #009900; 
+        background: linear-gradient(180deg, #66DD66, #009900); 
+        color: white; 
+    } 
+    .ball-maroon { 
+        --ball-color-solid: #663333; 
+        background: linear-gradient(180deg, #995555, #663333); 
+        color: white; 
+    }
+    /* 8 號 (黑球) 保持原來的徑向漸變效果 */
+    .ball-black 	{ 
+        --ball-color-solid: #000000; 
+        background: radial-gradient(circle at 30% 30%, #3b3b3b, #000000 60%); 
+        color: white; 
+        border-color: rgba(255,255,255,0.06); 
+    } 
 
-    /* stripe 球 (9~13) - **已修改：使用 linear-gradient 實現中間主色帶，上下白邊** */
+    /* stripe 球 (9~13) - 繼續使用 --ball-color-solid 作為中間純色帶 */
     .ball-stripe {
-      /* * 實現撞球條紋球樣式：
-       * 0% - 20% 白色 (上邊)
-       * 20% - 80% 主色 (中間色帶)
-       * 80% - 100% 白色 (下邊)
-       */
       background: linear-gradient(
           to bottom, 
           white 0%, 
@@ -74,11 +103,9 @@
           white 80%, 
           white 100%
       );
-      /* 由於有白色邊緣，確保數字使用深色以保持對比度 */
       color: #071024;
       font-weight: 700;
       overflow: hidden; 
-      /* 條紋球的陰影和過渡效果保持不變 */
     }
 
     @media (max-width:640px){ .ball-btn { width:34px; height:34px; font-size:13px; margin:3px; } }
@@ -210,7 +237,6 @@
         const btn=document.createElement('button'); 
         btn.className='ball-btn'; 
         
-        // **修改**：直接將數字設為按鈕的 textContent
         btn.textContent = n; 
         
         // 判斷顏色
