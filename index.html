@@ -104,7 +104,7 @@
 <body>
   <div class="max-w-5xl mx-auto p-6">
     <div id="marqueeContainer">
-        <div id="marqueeText">歡迎 ~ 預祝各位都能抽副好牌！</div>
+        <div id="marqueeText">歡迎使用 ~ Card Pool Challenge！</div>
     </div>
 
     <div id="status" class="mb-4 text-sm small">初始化中…</div>
@@ -241,7 +241,7 @@
     // ---------- 跑馬燈邏輯 ----------
     function updateMarquee() {
         if (!gameState || !gameState.gameStarted) {
-            marqueeTextEl.textContent = "🎱 歡迎 ~ 預祝各位都能抽副好牌！";
+            marqueeTextEl.textContent = "🎱 Welcome to Card Pool Challenge.  稍等發牌...遊戲即將開始 ~ 預祝各位都能抽副好牌！";
             return;
         }
 
