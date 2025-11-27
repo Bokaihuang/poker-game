@@ -438,7 +438,7 @@
             try {
                 const snap = await getDoc(roomRef);
                 if (!snap.exists()) {
-                    const players = {}; players[currentUser.uid] = { id: currentUser.uid, nickname: isKai ? 'kai' : nickInput, cards: [] };
+                    const players = {}; players[currentUser.uid] = { id: currentUser.uid, nickname: isKai ? 'Kai' : nickInput, cards: [] };
                     const docData = { players, gameStarted: false, notice: isKai ? '房主 Kai 已建立房間' : '房間已建立', updatedAt: serverTimestamp(), deck: [], revealedNumbers: [] };
                     if (isKai) docData.creatorId = currentUser.uid;
                     await setDoc(roomRef, docData);
@@ -518,7 +518,12 @@
             const playerIds = Object.keys(players || {});
             roomOwnerEl.textContent = gameState.creatorId ? players[gameState.creatorId]?.nickname || '—' : '—';
             roomCountEl.textContent = playerIds.length + ' / ' + MAX_PLAYERS;
-            myNickEl.textContent = myNickname;
+            if (players[currentUser.uid]) {
+                myNickname = players[currentUser.uid].nickname || '';
+                myNickEl.textContent = myNickname;
+            } else {
+                myNickEl.textContent = '—';
+            }
             btnStart.style.display = (gameState.creatorId === currentUser.uid) ? 'inline-block' : 'none';
             btnRestart.style.display = (gameState.creatorId === currentUser.uid) ? 'inline-block' : 'none';
             noticeEl.textContent = gameState.notice || '';
