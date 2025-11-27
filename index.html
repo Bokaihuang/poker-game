@@ -1,606 +1,469 @@
 <!doctype html>
 <html lang="zh-TW">
-
 <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width,initial-scale=1" />
-    <title>Pool Poker</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <style>
-        body {
-            background: #071024;
-            color: #e6eef8;
-            font-family: Inter, system-ui, -apple-system, "Segoe UI", Roboto, Arial;
-        }
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>Pool Poker</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body { background:#071024; color:#e6eef8; font-family: Inter, system-ui, -apple-system, "Segoe UI", Roboto, Arial; }
+    .card { width:54px; height:74px; border-radius:8px; display:flex;align-items:center;justify-content:center;font-weight:700;box-shadow:0 6px 16px rgba(0,0,0,.6); }
+    .card-back { background:linear-gradient(180deg,#0b1220,#081228); border:2px solid rgba(255,255,255,.04); color:transparent; }
+    .card-face { background:white; color:#071024; border:2px solid rgba(2,6,23,.06); }
+    .marked { outline:3px solid #facc15; transform:scale(1.05); } /* 黃框標註 */
+    .small { font-size:.85rem; color:#cfe8ff; }
+    .suit-red { color:#dc2626; }
+    .suit-black { color:#111827; }
+    .foul-btn { background:#ef4444; color:white; padding:6px 8px; border-radius:6px; font-weight:600; cursor:pointer; border:none; }
+    .foul-btn[disabled] { opacity:0.5; cursor:not-allowed; }
+    .player-header { display:flex; gap:8px; align-items:center; justify-content:space-between; }
 
-        .card {
-            width: 54px;
-            height: 74px;
-            border-radius: 8px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-weight: 700;
-            box-shadow: 0 6px 16px rgba(0, 0, 0, .6);
-        }
+    /* ===== 球按鈕 美化 ===== */
+    .ball-btn {
+      width:40px;
+      height:40px;
+      border-radius:50%;
+      font-weight:700;
+      cursor:pointer;
+      border: 2px solid transparent;
+      display:inline-flex;
+      align-items:center;
+      justify-content:center;
+      margin:4px;
+      user-select:none;
+      transition: transform 160ms ease, box-shadow 160ms ease, border-color 160ms ease, filter 160ms ease;
+      box-shadow: 0 6px 12px rgba(2,6,23,0.6), inset 0 -6px 10px rgba(255,255,255,0.03);
+      color: #071024;
+      font-size: 14px;
+      position: relative; 
+    }
+    .ball-btn:hover { transform: translateY(-3px) scale(1.03); filter: brightness(1.06); }
+    .ball-btn:active { transform: translateY(0) scale(0.98); }
 
-        .card-back {
-            background: linear-gradient(180deg, #0b1220, #081228);
-            border: 2px solid rgba(255, 255, 255, .04);
-            color: transparent;
-        }
+    /* 選中狀態 */
+    .ball-btn.selected {
+      border-color: #55CCFF; 
+      box-shadow: 0 8px 18px rgba(85,204,255,0.2), 0 0 8px rgba(85,204,255,0.3); 
+      transform: scale(1.12);
+      filter: brightness(1.08);
+    }
 
-        .card-face {
-            background: white;
-            color: #071024;
-            border: 2px solid rgba(2, 6, 23, .06);
-        }
+    /* 球顏色 */
+    .ball-yellow { --ball-color-solid: #FFA600; background: linear-gradient(180deg, #ffc65b, #ffa600); } 
+    .ball-blue 	{ --ball-color-solid: #2337f0; background: linear-gradient(180deg, #3462c5, #0011aa); color: white; }
+    .ball-red 	 { --ball-color-solid: #CC0000; background: linear-gradient(180deg, #e64a4a, #cc0000); color: white; } 
+    .ball-purple { --ball-color-solid: #5733bb; background: linear-gradient(180deg, #615ac4, #5733bb); color: white; } 
+    .ball-orange { --ball-color-solid: #dd7d00; background: linear-gradient(180deg, #fcae61, #dd7d00); } 
+    .ball-green 	{ --ball-color-solid: #129900; background: linear-gradient(180deg, #64b84f, #138304); color: white; } 
+    .ball-maroon { --ball-color-solid: #663333; background: linear-gradient(180deg, #9e5f5f, #663633); color: white; }
+    .ball-black 	{ --ball-color-solid: #000000; background: radial-gradient(circle at 30% 30%, #a39595, #000000 60%); color: white; border-color: rgba(255,255,255,0.06); } 
 
-        .marked {
-            position: relative;   /* 保留以使用 ::after */
-        }  
-        .marked::after {
-            content: '';
-            position: absolute;
-            top: 50%;
-            left: 0;
-            width: 100%;
-            height: 2px;
-            background: rgb(109, 176, 240);
-            transform: rotate(-45deg);
-        }
+    /* stripe 球 (9~13) */
+    .ball-stripe {
+      background: linear-gradient(
+          to bottom, 
+          white 0%, 
+          white 20%, 
+          var(--ball-color-solid) 20%, 
+          var(--ball-color-solid) 80%, 
+          white 80%, 
+          white 100%
+      );
+      color: #071024;
+      font-weight: 700;
+      overflow: hidden; 
+    }
 
-        .small {
-            font-size: .85rem;
-            color: #cfe8ff;
-        }
+    /* ===== 跑馬燈樣式 ===== */
+    #marqueeContainer {
+        overflow: hidden;
+        white-space: nowrap;
+        background-color: #1e293b; /* 深藍灰背景 */
+        padding: 6px 0;
+        border-radius: 8px;
+        margin-bottom: 1rem;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.4);
+    }
 
-        .suit-red {
-            color: #dc2626;
-        }
+    #marqueeText {
+        display: inline-block;
+        color: #fde047; /* 黃色文字 */
+        font-weight: 700;
+        padding-left: 100%; /* 從右邊開始移動 */
+        animation: marquee 15s linear infinite; /* 30秒一個循環 */
+    }
 
-        .suit-black {
-            color: #111827;
-        }
+    @keyframes marquee {
+        0%   { transform: translate(0, 0); }
+        100% { transform: translate(-100%, 0); }
+    }
 
-        .foul-btn {
-            background: #ef4444;
-            color: white;
-            padding: 6px 8px;
-            border-radius: 6px;
-            font-weight: 600;
-            cursor: pointer;
-            border: none;
-        }
-
-        .foul-btn[disabled] {
-            opacity: 0.5;
-            cursor: not-allowed;
-        }
-
-        .player-header {
-            display: flex;
-            gap: 8px;
-            align-items: center;
-            justify-content: space-between;
-        }
-
-        /* ===== 球按鈕 美化 ===== */
-        .ball-btn {
-            width: 40px;
-            height: 40px;
-            border-radius: 50%;
-            font-weight: 700;
-            cursor: pointer;
-            border: 2px solid transparent;
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            margin: 4px;
-            user-select: none;
-            transition: transform 160ms ease, box-shadow 160ms ease, border-color 160ms ease, filter 160ms ease;
-            box-shadow: 0 6px 12px rgba(2, 6, 23, 0.6), inset 0 -6px 10px rgba(255, 255, 255, 0.03);
-            color: #071024;
-            font-size: 14px;
-            position: relative;
-        }
-
-        .ball-btn:hover {
-            transform: translateY(-3px) scale(1.03);
-            filter: brightness(1.06);
-        }
-
-        .ball-btn:active {
-            transform: translateY(0) scale(0.98);
-        }
-
-        /* 選中狀態 */
-        .ball-btn.selected {
-            border-color: #55CCFF;
-            box-shadow: 0 8px 18px rgba(85, 204, 255, 0.2), 0 0 8px rgba(85, 204, 255, 0.3);
-            transform: scale(1.12);
-            filter: brightness(1.08);
-        }
-
-        /* 球顏色 */
-        .ball-yellow {
-            --ball-color-solid: #FFA600;
-            background: linear-gradient(180deg, #ffc65b, #ffa600);
-        }
-
-        .ball-blue {
-            --ball-color-solid: #2337f0;
-            background: linear-gradient(180deg, #3462c5, #0011aa);
-            color: white;
-        }
-
-        .ball-red {
-            --ball-color-solid: #CC0000;
-            background: linear-gradient(180deg, #e64a4a, #cc0000);
-            color: white;
-        }
-
-        .ball-purple {
-            --ball-color-solid: #5733bb;
-            background: linear-gradient(180deg, #615ac4, #5733bb);
-            color: white;
-        }
-
-        .ball-orange {
-            --ball-color-solid: #dd7d00;
-            background: linear-gradient(180deg, #fcae61, #dd7d00);
-        }
-
-        .ball-green {
-            --ball-color-solid: #129900;
-            background: linear-gradient(180deg, #64b84f, #138304);
-            color: white;
-        }
-
-        .ball-maroon {
-            --ball-color-solid: #663333;
-            background: linear-gradient(180deg, #9e5f5f, #663633);
-            color: white;
-        }
-
-        .ball-black {
-            --ball-color-solid: #000000;
-            background: radial-gradient(circle at 30% 30%, #a39595, #000000 60%);
-            color: white;
-            border-color: rgba(255, 255, 255, 0.06);
-        }
-
-        /* stripe 球 (9~13) */
-        .ball-stripe {
-            background: linear-gradient(to bottom,
-                    white 0%,
-                    white 20%,
-                    var(--ball-color-solid) 20%,
-                    var(--ball-color-solid) 80%,
-                    white 80%,
-                    white 100%);
-            color: #071024;
-            font-weight: 700;
-            overflow: hidden;
-        }
-
-        /* ===== 跑馬燈樣式 ===== */
-        #marqueeContainer {
-            overflow: hidden;
-            white-space: nowrap;
-            background-color: #1e293b;
-            /* 深藍灰背景 */
-            padding: 6px 0;
-            border-radius: 8px;
-            margin-bottom: 1rem;
-            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.4);
-        }
-
-        #marqueeText {
-            display: inline-block;
-            color: #fde047;
-            /* 黃色文字 */
-            font-weight: 700;
-            padding-left: 100%;
-            /* 從右邊開始移動 */
-            animation: marquee 15s linear infinite;
-            /* 30秒一個循環 */
-        }
-
-        @keyframes marquee {
-            0% {
-                transform: translate(0, 0);
-            }
-
-            100% {
-                transform: translate(-100%, 0);
-            }
-        }
-
-        @media (max-width:640px) {
-            .ball-btn {
-                width: 34px;
-                height: 34px;
-                font-size: 13px;
-                margin: 3px;
-            }
-        }
-    </style>
+    @media (max-width:640px){ .ball-btn { width:34px; height:34px; font-size:13px; margin:3px; } }
+  </style>
 </head>
-
 <body>
-    <div class="max-w-5xl mx-auto p-6">
-        <div id="marqueeContainer">
-            <div id="marqueeText">歡迎使用 ~ Card Pool Challenge！</div>
-        </div>
-
-        <div id="status" class="mb-4 text-sm small">初始化中…</div>
-
-        <div id="joinPanel" class="mb-6 grid grid-cols-1 sm:grid-cols-3 gap-3">
-            <div class="col-span-2">
-                <label class="small">暱稱</label>
-                <input id="nickname" class="w-full p-2 rounded bg-slate-800 border border-slate-700"
-                    placeholder="輸入暱稱" />
-            </div>
-            <div>
-                <button id="btnJoin" class="w-full py-2 rounded bg-emerald-600 hover:bg-emerald-500">加入房間</button>
-            </div>
-        </div>
-
-        <div id="roomPanel" class="mb-6 p-4 rounded bg-slate-900 border border-slate-700 hidden">
-            <div class="flex items-center justify-between mb-3">
-                <div>
-                    <div class="text-xs small">房間 ID</div>
-                    <div class="font-mono">main-room</div>
-                </div>
-                <div>
-                    <div class="text-xs small">房主</div>
-                    <div id="roomOwner" class="font-bold">—</div>
-                </div>
-                <div>
-                    <div class="text-xs small">人數</div>
-                    <div id="roomCount">0 / 5</div>
-                </div>
-                <div>
-                    <div class="text-xs small">我的暱稱</div>
-                    <div id="myNick" class="font-mono">—</div>
-                </div>
-            </div>
-
-            <div class="flex gap-2 items-center mb-4">
-                <button id="btnStart" class="px-3 py-2 rounded bg-yellow-600 hover:bg-yellow-500 hidden">發牌</button>
-                <button id="btnRestart" class="px-3 py-2 rounded bg-slate-700 hover:bg-slate-600 hidden">重開</button>
-                <button id="btnLeave" class="px-3 py-2 rounded bg-red-600 hover:bg-red-500 ml-auto">退出房間</button>
-                <div id="notice" class="ml-4 small text-slate-300"></div>
-            </div>
-
-            <div id="ballButtons" class="mb-4"></div>
-            <div id="playersArea" class="grid grid-cols-1 md:grid-cols-2 gap-4"></div>
-        </div>
+  <div class="max-w-5xl mx-auto p-6">
+    <div id="marqueeContainer">
+        <div id="marqueeText">歡迎使用 ~ Card Pool Challenge！</div>
     </div>
 
-    <script type="module">
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-        import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { getFirestore, doc, onSnapshot, setDoc, updateDoc, getDoc, deleteDoc, serverTimestamp, arrayUnion, arrayRemove, deleteField, runTransaction } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+    <div id="status" class="mb-4 text-sm small">初始化中…</div>
 
-        const EXTERNAL_FIREBASE_CONFIG = {
-            apiKey: "AIzaSyCk54DEp6rzvpfQBBNW_iJByZ3boyHEPF0",
-            authDomain: "poolpokergame-b88ed.firebaseapp.com",
-            projectId: "poolpokergame-b88ed",
-            storageBucket: "poolpokergame-b88ed.firebasestorage.app",
-            messagingSenderId: "574863840102",
-            appId: "1:574863840102:web:14368aaf84b3640c6eeea7"
-        };
+    <div id="joinPanel" class="mb-6 grid grid-cols-1 sm:grid-cols-3 gap-3">
+      <div class="col-span-2">
+        <label class="small">暱稱</label>
+        <input id="nickname" class="w-full p-2 rounded bg-slate-800 border border-slate-700" placeholder="輸入暱稱" />
+      </div>
+      <div>
+        <button id="btnJoin" class="w-full py-2 rounded bg-emerald-600 hover:bg-emerald-500">加入房間</button>
+      </div>
+    </div>
 
-        const APP_ID = EXTERNAL_FIREBASE_CONFIG.projectId;
-        const ROOM_PATH = `artifacts/${APP_ID}/public/data/pool_poker_rooms/main_room`;
-        const CARDS_PER_PLAYER = 8;
-        const MAX_PLAYERS = 5;
-        const MAX_EXTRA = 6;
+    <div id="roomPanel" class="mb-6 p-4 rounded bg-slate-900 border border-slate-700 hidden">
+      <div class="flex items-center justify-between mb-3">
+        <div><div class="text-xs small">房間 ID</div><div class="font-mono">main-room</div></div>
+        <div><div class="text-xs small">房主</div><div id="roomOwner" class="font-bold">—</div></div>
+        <div><div class="text-xs small">人數</div><div id="roomCount">0 / 5</div></div>
+        <div><div class="text-xs small">我的暱稱</div><div id="myNick" class="font-mono">—</div></div>
+      </div>
 
-        const statusEl = document.getElementById('status');
-        const nicknameInput = document.getElementById('nickname');
-        const btnJoin = document.getElementById('btnJoin');
-        const joinPanel = document.getElementById('joinPanel');
-        const roomPanel = document.getElementById('roomPanel');
-        const roomOwnerEl = document.getElementById('roomOwner');
-        const roomCountEl = document.getElementById('roomCount');
-        const playersArea = document.getElementById('playersArea');
-        const myNickEl = document.getElementById('myNick');
-        const btnStart = document.getElementById('btnStart');
-        const btnRestart = document.getElementById('btnRestart');
-        const btnLeave = document.getElementById('btnLeave');
-        const noticeEl = document.getElementById('notice');
-        const ballButtonsEl = document.getElementById('ballButtons');
-        const marqueeTextEl = document.getElementById('marqueeText');
+      <div class="flex gap-2 items-center mb-4">
+        <button id="btnStart" class="px-3 py-2 rounded bg-yellow-600 hover:bg-yellow-500 hidden">發牌</button>
+        <button id="btnRestart" class="px-3 py-2 rounded bg-slate-700 hover:bg-slate-600 hidden">重開</button>
+        <button id="btnLeave" class="px-3 py-2 rounded bg-red-600 hover:bg-red-500 ml-auto">退出房間</button>
+        <div id="notice" class="ml-4 small text-slate-300"></div>
+      </div>
 
-        const app = initializeApp(EXTERNAL_FIREBASE_CONFIG);
-        const auth = getAuth(app);
-        const db = getFirestore(app);
-        const roomRef = doc(db, ROOM_PATH);
+      <div id="ballButtons" class="mb-4"></div>
+      <div id="playersArea" class="grid grid-cols-1 md:grid-cols-2 gap-4"></div>
+    </div>
+  </div>
 
-        let currentUser = null;
-        let gameState = null;
-        let myNickname = '';
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+    import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+    import { getFirestore, doc, onSnapshot, setDoc, updateDoc, getDoc, deleteDoc, serverTimestamp, arrayUnion, arrayRemove, deleteField, runTransaction } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
-        function setStatus(s) { statusEl.textContent = s; }
+    const EXTERNAL_FIREBASE_CONFIG = {
+      apiKey: "AIzaSyCk54DEp6rzvpfQBBNW_iJByZ3boyHEPF0",
+      authDomain: "poolpokergame-b88ed.firebaseapp.com",
+      projectId: "poolpokergame-b88ed",
+      storageBucket: "poolpokergame-b88ed.firebasestorage.app",
+      messagingSenderId: "574863840102",
+      appId: "1:574863840102:web:14368aaf84b3640c6eeea7"
+    };
 
-        async function doAnonymousAuth() {
-            setStatus('使用匿名登入 Firebase...');
-            try { const cred = await signInAnonymously(auth); console.log('signed in uid=', cred.user.uid); }
-            catch (e) { console.log('auth failed', e); setStatus('Auth 失敗'); }
-        }
+    const APP_ID = EXTERNAL_FIREBASE_CONFIG.projectId;
+    const ROOM_PATH = `artifacts/${APP_ID}/public/data/pool_poker_rooms/main_room`;
+    const CARDS_PER_PLAYER = 8;
+    const MAX_PLAYERS = 5;
+    const MAX_EXTRA = 6;
 
-        onAuthStateChanged(auth, (user) => { currentUser = user; if (user) { setStatus('已登入：' + user.uid); subscribeRoom(); } else { setStatus('未登入'); } });
+    const statusEl = document.getElementById('status');
+    const nicknameInput = document.getElementById('nickname');
+    const btnJoin = document.getElementById('btnJoin');
+    const joinPanel = document.getElementById('joinPanel');
+    const roomPanel = document.getElementById('roomPanel');
+    const roomOwnerEl = document.getElementById('roomOwner');
+    const roomCountEl = document.getElementById('roomCount');
+    const playersArea = document.getElementById('playersArea');
+    const myNickEl = document.getElementById('myNick');
+    const btnStart = document.getElementById('btnStart');
+    const btnRestart = document.getElementById('btnRestart');
+    const btnLeave = document.getElementById('btnLeave');
+    const noticeEl = document.getElementById('notice');
+    const ballButtonsEl = document.getElementById('ballButtons');
+    const marqueeTextEl = document.getElementById('marqueeText');
 
-        let unsubscribe = null;
-        function subscribeRoom() {
-            if (unsubscribe) return;
-            setStatus('訂閱 main-room...');
-            unsubscribe = onSnapshot(roomRef, (snap) => {
-                if (!snap.exists()) { gameState = null; renderUI(); setStatus('房間尚未建立或已被清空'); return; }
-                gameState = snap.data(); renderUI(); setStatus('已連到房間');
-            }, (err) => { console.log('snapshot err', err); setStatus('訂閱失敗'); });
-        }
+    const app = initializeApp(EXTERNAL_FIREBASE_CONFIG);
+    const auth = getAuth(app);
+    const db = getFirestore(app);
+    const roomRef = doc(db, ROOM_PATH);
 
-        const suits = ['♣', '♦', '♥', '♠'];
-        const rankMap = { 1: 'A', 11: 'J', 12: 'Q', 13: 'K' };
+    let currentUser = null;
+    let gameState = null;
+    let myNickname = '';
 
-        function getCardRank(cardCode) {
-            const r = cardCode.slice(1);
-            if (r === 'A') return 1;
-            if (r === 'J') return 11;
-            if (r === 'Q') return 12;
-            if (r === 'K') return 13;
-            return parseInt(r);
-        }
+    function setStatus(s){ statusEl.textContent = s; }
 
-        function buildDeck() { const deck = []; for (let r = 1; r <= 13; r++) { for (let s = 0; s < 4; s++) { const rank = rankMap[r] || String(r); deck.push({ suit: suits[s], rank, code: `${suits[s]}${rank}` }); } } return deck; }
-        function shuffle(arr) { for (let i = arr.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1));[arr[i], arr[j]] = [arr[j], arr[i]]; } return arr; }
+    async function doAnonymousAuth(){
+      setStatus('使用匿名登入 Firebase...');
+      try{ const cred=await signInAnonymously(auth); console.log('signed in uid=', cred.user.uid); }
+      catch(e){ console.log('auth failed', e); setStatus('Auth 失敗'); }
+    }
 
-        function calculateUnmarkedCards(cards, revealedNumbers) {
-            if (!cards || cards.length === 0) return 0;
-            if (!revealedNumbers || revealedNumbers.length === 0) return cards.length;
-            let unmarkedCount = 0;
-            for (const cardCode of cards) {
-                const rank = getCardRank(cardCode);
-                if (!revealedNumbers.includes(rank)) {
-                    unmarkedCount++;
-                }
-            }
-            return unmarkedCount;
-        }
+    onAuthStateChanged(auth,(user)=>{ currentUser=user; if(user){ setStatus('已登入：'+user.uid); subscribeRoom(); } else { setStatus('未登入'); } });
 
-        function updateMarquee() {
-            if (!gameState || !gameState.gameStarted) {
-                marqueeTextEl.textContent = "🎱 Welcome to Card Pool Challenge.  稍等發牌...遊戲即將開始 ~ 預祝各位都能抽副好牌！";
-                return;
-            }
+    let unsubscribe=null;
+    function subscribeRoom(){
+      if(unsubscribe) return;
+      setStatus('訂閱 main-room...');
+      // 任何房間資料變化都會觸發這裡，並執行 renderUI()
+      unsubscribe = onSnapshot(roomRef,(snap)=>{
+        if(!snap.exists()){ gameState=null; renderUI(); setStatus('房間尚未建立或已被清空'); return; }
+        gameState = snap.data(); renderUI(); setStatus('已連到房間');
+      }, (err)=>{ console.log('snapshot err',err); setStatus('訂閱失敗'); });
+    }
 
-            const players = gameState.players || {};
-            const revealedNumbers = gameState.revealedNumbers || [];
-            const messages = [];
+    const suits=['♣','♦','♥','♠'];
+    const rankMap={1:'A',11:'J',12:'Q',13:'K'};
+    
+    // 將卡牌代碼 (如 '♠A') 轉換為其數字等級 (如 1)
+    function getCardRank(cardCode){
+        const r = cardCode.slice(1);
+        if (r==='A') return 1; 
+        if (r==='J') return 11; 
+        if (r==='Q') return 12; 
+        if (r==='K') return 13; 
+        return parseInt(r);
+    }
 
-            for (const playerId in players) {
-                const player = players[playerId];
-                if (player && player.id) {
-                    const cards = player.cards || [];
-                    const unmarkedCards = calculateUnmarkedCards(cards, revealedNumbers);
-                    messages.push(`【${player.nickname}】剩餘牌：${unmarkedCards} 張`);
-                }
-            }
+    function buildDeck(){ const deck=[]; for(let r=1;r<=13;r++){ for(let s=0;s<4;s++){ const rank=rankMap[r]||String(r); deck.push({suit:suits[s], rank, code:`${suits[s]}${rank}`}); } } return deck; }
+    function shuffle(arr){ for(let i=arr.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [arr[i],arr[j]]=[arr[j],arr[i]]; } return arr; }
 
-            if (messages.length > 0) {
-                const separator = " 🌟 ";
-                let content = messages.join(separator);
-                content = "🏆 當前牌局進度: " + content + separator + content + separator + content + separator;
-                marqueeTextEl.textContent = content;
-            } else {
-                marqueeTextEl.textContent = "🎱 遊戲已開始，等待玩家加入或發牌...";
-            }
-        }
+    // --- 核心計算函數 ---
+    function calculateUnmarkedCards(cards, revealedNumbers) {
+        if (!cards || cards.length === 0) return 0;
+        if (!revealedNumbers || revealedNumbers.length === 0) return cards.length;
 
-        function toggleNumber(n) {
-            if (!gameState) return;
-            const numbers = Array.isArray(gameState.revealedNumbers) ? [...gameState.revealedNumbers] : [];
-            if (numbers.includes(n)) numbers.splice(numbers.indexOf(n), 1);
-            else numbers.push(n);
-            updateDoc(roomRef, { revealedNumbers: numbers, updatedAt: serverTimestamp() })
-                .catch(e => console.log('toggleNumber err', e));
-        }
-
-        function renderBallButtons() {
-            ballButtonsEl.innerHTML = '';
-            for (let n = 1; n <= 13; n++) {
-                const btn = document.createElement('button');
-                btn.className = 'ball-btn';
-                btn.textContent = n;
-                if (n === 1 || n === 9) btn.classList.add('ball-yellow');
-                else if (n === 2 || n === 10) btn.classList.add('ball-blue');
-                else if (n === 3 || n === 11) btn.classList.add('ball-red');
-                else if (n === 4 || n === 12) btn.classList.add('ball-purple');
-                else if (n === 5 || n === 13) btn.classList.add('ball-orange');
-                else if (n === 6) btn.classList.add('ball-green');
-                else if (n === 7) btn.classList.add('ball-maroon');
-                else if (n === 8) btn.classList.add('ball-black');
-                if (n >= 9 && n <= 13) { btn.classList.add('ball-stripe'); }
-                if (gameState.revealedNumbers && gameState.revealedNumbers.includes(n)) btn.classList.add('selected');
-                btn.onclick = () => { toggleNumber(n); };
-                ballButtonsEl.appendChild(btn);
+        // 計算有多少張牌的號碼 '不在' revealedNumbers 陣列中
+        let unmarkedCount = 0;
+        for (const cardCode of cards) {
+            const rank = getCardRank(cardCode);
+            if (!revealedNumbers.includes(rank)) {
+                unmarkedCount++;
             }
         }
+        return unmarkedCount;
+    }
 
-        btnJoin.addEventListener('click', async () => {
-            if (!currentUser) { setStatus('尚未登入'); return; }
-            const nickInput = (nicknameInput.value || '').trim(); if (!nickInput) { setStatus('請先輸入暱稱'); return; }
-            const isKai = nickInput === 'Kai';
-            try {
-                const snap = await getDoc(roomRef);
-                if (!snap.exists()) {
-                    const players = {}; players[currentUser.uid] = { id: currentUser.uid, nickname: isKai ? 'Kai' : nickInput, cards: [] };
-                    const docData = { players, gameStarted: false, notice: isKai ? '房主 Kai 已建立房間' : '房間已建立', updatedAt: serverTimestamp(), deck: [], revealedNumbers: [] };
-                    if (isKai) docData.creatorId = currentUser.uid;
-                    await setDoc(roomRef, docData);
-                    myNickname = isKai ? 'Kai' : nickInput; nicknameInput.value = isKai ? '' : nickInput; setStatus(isKai ? '已以 Kai 建立房間' : '房間建立'); return;
-                } else {
-                    const data = snap.data(); const players = data.players || {};
-                    const realCount = Object.values(players).filter(p => p && p.id).length; if (realCount >= MAX_PLAYERS) { setStatus('房間已滿'); return; }
-                    players[currentUser.uid] = { id: currentUser.uid, nickname: nickInput, cards: [] };
-                    await updateDoc(roomRef, { players, updatedAt: serverTimestamp() });
-                    myNickname = nickInput; nicknameInput.value = '';
-                }
-            } catch (e) { console.log('join err', e); setStatus('加入失敗'); }
+
+    // ---------- 跑馬燈邏輯 ----------
+    function updateMarquee() {
+        if (!gameState || !gameState.gameStarted) {
+            marqueeTextEl.textContent = "🎱 Welcome to Card Pool Challenge.  稍等發牌...遊戲即將開始 ~ 預祝各位都能抽副好牌！";
+            return;
+        }
+
+        const players = gameState.players || {};
+        const revealedNumbers = gameState.revealedNumbers || [];
+        const messages = [];
+
+        for (const playerId in players) {
+            const player = players[playerId];
+            if (player && player.id) {
+                const cards = player.cards || [];
+                // 使用修正後的計算邏輯
+                const unmarkedCards = calculateUnmarkedCards(cards, revealedNumbers);
+                
+                messages.push(`【${player.nickname}】剩餘牌：${unmarkedCards} 張`);
+            }
+        }
+
+        if (messages.length > 0) {
+            const separator = " 🌟 ";
+            let content = messages.join(separator);
+            content = "🏆 當前牌局進度: " + content + separator + content + separator + content + separator; 
+            marqueeTextEl.textContent = content;
+        } else {
+            marqueeTextEl.textContent = "🎱 遊戲已開始，等待玩家加入或發牌...";
+        }
+    }
+
+    // ---------- 圓形按鈕 ----------
+    function toggleNumber(n) {
+      if(!gameState) return;
+      // 所有玩家都可以點擊球，所以不需要檢查是不是房主
+
+      const numbers = Array.isArray(gameState.revealedNumbers)?[...gameState.revealedNumbers]:[];
+      if(numbers.includes(n)) numbers.splice(numbers.indexOf(n),1);
+      else numbers.push(n);
+      
+      // 點擊球會更新資料庫，onSnapshot 會觸發 renderUI() 和 updateMarquee()
+      updateDoc(roomRef,{ revealedNumbers: numbers, updatedAt: serverTimestamp() })
+        .catch(e=>console.log('toggleNumber err',e));
+    }
+
+    function renderBallButtons(){
+      ballButtonsEl.innerHTML='';
+      for(let n=1;n<=13;n++){
+        const btn=document.createElement('button'); 
+        btn.className='ball-btn'; 
+        
+        btn.textContent = n; 
+        
+        // 判斷顏色
+        if(n===1 || n===9) btn.classList.add('ball-yellow');
+        else if(n===2 || n===10) btn.classList.add('ball-blue');
+        else if(n===3 || n===11) btn.classList.add('ball-red');
+        else if(n===4 || n===12) btn.classList.add('ball-purple');
+        else if(n===5 || n===13) btn.classList.add('ball-orange');
+        else if(n===6) btn.classList.add('ball-green');
+        else if(n===7) btn.classList.add('ball-maroon');
+        else if(n===8) btn.classList.add('ball-black');
+
+        // 9-13 號為條紋球，應用條紋樣式
+        if(n>=9 && n<=13){ 
+            btn.classList.add('ball-stripe'); 
+        }
+
+        if(gameState.revealedNumbers && gameState.revealedNumbers.includes(n)) btn.classList.add('selected');
+
+        btn.onclick = () => { toggleNumber(n); };
+        ballButtonsEl.appendChild(btn);
+      }
+    }
+
+    // ---------- Join / Leave / Start / Restart / Foul ----------
+    btnJoin.addEventListener('click', async()=>{
+      if(!currentUser) { setStatus('尚未登入'); return; }
+      const nickInput=(nicknameInput.value||'').trim(); if(!nickInput){ setStatus('請先輸入暱稱'); return; }
+      const isKai = nickInput==='Kai';
+      try{
+        const snap=await getDoc(roomRef);
+        if(!snap.exists()){
+          // 移除 marked 欄位，因為不再需要它追蹤玩家點擊的牌
+          const players={}; players[currentUser.uid]={id:currentUser.uid, nickname:isKai?'kai':nickInput, cards:[]}; 
+          const docData={ players, gameStarted:false, notice:isKai?'房主 Kai 已建立房間':'房間已建立', updatedAt:serverTimestamp(), deck:[], revealedNumbers:[] };
+          if(isKai) docData.creatorId=currentUser.uid;
+          await setDoc(roomRef,docData);
+          myNickname=isKai?'Kai':nickInput; nicknameInput.value=isKai?'':nickInput; setStatus(isKai?'已以 Kai 建立房間':'房間建立'); return;
+        } else {
+          const data=snap.data(); const players=data.players||{};
+          const realCount=Object.values(players).filter(p=>p&&p.id).length; if(realCount>=MAX_PLAYERS){ setStatus('房間已滿'); return; }
+          if(players[currentUser.uid]&&players[currentUser.uid].id){ setStatus('您已在房間中'); return; }
+          const updateObj={ updatedAt:serverTimestamp() };
+          // 移除 marked 欄位
+          updateObj[`players.${currentUser.uid}`]={id:currentUser.uid, nickname:isKai?'kai':nickInput, cards:[]}; 
+          if(isKai){ updateObj['creatorId']=currentUser.uid; updateObj['notice']='kai 已成為房主'; myNickname='kai'; nicknameInput.value=''; } else { myNickname=nickInput; }
+          updateDoc(roomRef,updateObj); setStatus('已加入房間');
+        }
+      } catch(e){ console.log('join err',e); setStatus('加入失敗'); }
+    });
+
+    btnLeave.addEventListener('click', async()=>{ if(!currentUser) return; try{ if(gameState.creatorId===currentUser.uid&&myNickname==='kai'){ await deleteDoc(roomRef); setStatus('房主已退出'); return; } await updateDoc(roomRef,{ [`players.${currentUser.uid}`]:deleteField(), updatedAt:serverTimestamp() }); setStatus('已退出房間'); myNickname=''; } catch(e){ console.log('leave err',e); setStatus('退出失敗'); } });
+
+    btnStart.addEventListener('click', async()=>{
+      if(!currentUser||!gameState) return; if(gameState.creatorId!==currentUser.uid||myNickname!=='kai'){ setStatus('只有 kai 房主可以發牌'); return; }
+      try{
+        const players=gameState.players||{}; const pids=Object.keys(players).filter(k=>players[k]&&players[k].id);
+        let deckObj=buildDeck().map(c=>c.code); shuffle(deckObj);
+        const updateObj={gameStarted:true, notice:'遊戲開始：已發牌', updatedAt:serverTimestamp()};
+        pids.forEach((pid,idx)=>{ 
+          const start=idx*CARDS_PER_PLAYER; 
+          const hand=deckObj.slice(start,start+CARDS_PER_PLAYER); 
+          updateObj[`players.${pid}.cards`]=hand; 
+          // 移除 marked 的重置，因為已經在 join 時移除該欄位
+          // updateObj[`players.${pid}.marked`]=[]; 
         });
+        updateObj['deck']=deckObj.slice(pids.length*CARDS_PER_PLAYER);
+        updateObj['revealedNumbers']=[]; 
+        await updateDoc(roomRef,updateObj);
+        setStatus('發牌完成');
+      } catch(e){ console.log('start err',e); setStatus('發牌失敗'); }
+    });
 
-        btnLeave.addEventListener('click', async () => {
-            if (!currentUser) return;
-            try {
-                const snap = await getDoc(roomRef);
-                if (!snap.exists()) return;
-                const data = snap.data(); const players = data.players || {};
-                if (players[currentUser.uid]) delete players[currentUser.uid];
-                await updateDoc(roomRef, { players, updatedAt: serverTimestamp() });
-            } catch (e) { console.log('leave err', e); }
+    btnRestart.addEventListener('click', async()=>{
+      if(!currentUser||!gameState) return; if(gameState.creatorId!==currentUser.uid||myNickname!=='kai'){ setStatus('只有 kai 房主可以重開'); return; }
+      try{
+        const players=gameState.players||{}; const updateObj={ gameStarted:false, notice:'房主已重開遊戲', updatedAt:serverTimestamp(), revealedNumbers:[] };
+        Object.keys(players).forEach(pid=>{ if(players[pid]&&players[pid].id){ updateObj[`players.${pid}.cards`]=[]; } });
+        updateObj['deck']=[]; 
+        await updateDoc(roomRef,updateObj);
+        setStatus('已重開');
+      } catch(e){ console.log('restart err',e); setStatus('重開失敗'); }
+    });
+    
+    // 刪除 markCard 函數 (玩家不能點擊自己的牌)
+
+    async function foulDrawFor(playerId){
+      if(!currentUser) return;
+      try{ await runTransaction(db, async tx=>{
+        const snap=await tx.get(roomRef); if(!snap.exists()) throw new Error('房間不存在'); const data=snap.data();
+        const deck=Array.isArray(data.deck)?[...data.deck]:[]; const players=data.players||{}; const target=players[playerId];
+        if(!target||!target.id) throw new Error('玩家不存在'); const currentCount=Array.isArray(target.cards)?target.cards.length:0; 
+        if(currentCount>=CARDS_PER_PLAYER+MAX_EXTRA) throw new Error('此玩家已達最多 14 張（不能再抽）'); if(deck.length===0) throw new Error('剩餘牌已經抽完');
+        const drawn=deck.pop(); const newPlayers={ ...players, [playerId]:{ ...target, cards:[...(target.cards||[]), drawn] } };
+        tx.update(roomRef, { players:newPlayers, deck:deck, updatedAt:serverTimestamp() });
+      }); setStatus('犯規抽牌成功'); } catch(e){ console.log('foul draw err',e); setStatus('犯規抽牌失敗：'+(e.message||e)); } 
+    }
+    
+    // ---------- Render UI ----------
+    function renderUI(){
+      if(!gameState){ joinPanel.classList.remove('hidden'); roomPanel.classList.add('hidden'); myNickEl.textContent='—'; updateMarquee(); return; }
+      const players=gameState.players||{}; const cleanPlayers={}; Object.keys(players).forEach(k=>{ if(players[k]&&players[k].id) cleanPlayers[k]=players[k]; });
+      const amInRoom=currentUser&&cleanPlayers[currentUser.uid];
+      if(!amInRoom){ joinPanel.classList.remove('hidden'); roomPanel.classList.add('hidden'); roomOwnerEl.textContent=cleanPlayers[gameState.creatorId]?.nickname||'—'; roomCountEl.textContent=`${Object.keys(cleanPlayers).length} / ${MAX_PLAYERS}`; updateMarquee(); return; }
+      joinPanel.classList.add('hidden'); roomPanel.classList.remove('hidden'); myNickname=cleanPlayers[currentUser.uid].nickname||myNickname; myNickEl.textContent=myNickname;
+      roomOwnerEl.textContent=cleanPlayers[gameState.creatorId]?.nickname||'—'; roomCountEl.textContent=`${Object.keys(cleanPlayers).length} / ${MAX_PLAYERS}`; noticeEl.textContent=gameState.notice||'';
+
+      const amHost=gameState.creatorId===currentUser.uid && myNickname==='kai';
+      if(amHost){ btnStart.classList.remove('hidden'); btnRestart.classList.remove('hidden'); } else { btnStart.classList.add('hidden'); btnRestart.classList.add('hidden'); }
+
+      renderBallButtons();
+      updateMarquee(); // 跑馬燈更新
+
+      const revealedNumbers = gameState.revealedNumbers || [];
+
+      playersArea.innerHTML=''; const pList=Object.values(cleanPlayers); pList.sort((a,b)=>(a.id===currentUser.uid?-1:(b.id===currentUser.uid?1:0)));
+      pList.forEach(p=>{
+        const wrapper=document.createElement('div'); wrapper.className='p-3 rounded bg-slate-800 border border-slate-700';
+        const header=document.createElement('div'); header.className='player-header mb-2';
+        const left=document.createElement('div'); left.innerHTML=`<strong>${p.nickname||('p_'+p.id.slice(0,6))}</strong> ${p.id===currentUser.uid?'<span class="small"> (您)</span>':''}`;
+        const right=document.createElement('div'); right.style.display='flex'; right.style.gap='8px'; right.style.alignItems='center';
+        
+        const cards = p.cards || [];
+        const totalCards = cards.length;
+        // 使用修正後的計算邏輯
+        const unmarkedCards = calculateUnmarkedCards(cards, revealedNumbers);
+        const markedCards = totalCards - unmarkedCards; // 已標註的牌數 (根據球的狀態)
+        
+        const countSpan=document.createElement('div'); countSpan.className='small'; 
+        // 玩家區域的顯示：未標註牌數 (unmarkedCards) / 總牌數 (totalCards)
+        countSpan.textContent=`剩餘牌 ${unmarkedCards} / 總牌數 ${totalCards}`;
+        
+        const foulBtn=document.createElement('button'); foulBtn.className='foul-btn'; foulBtn.textContent='犯規 +1';
+          if (currentUser && currentUser.uid === p.id) {
+              foulBtn.onclick = () => foulDrawFor(p.id);
+          } else {
+              foulBtn.disabled = true;
+          }
+        const deckLen=(gameState.deck||[]).length;
+        foulBtn.disabled=!currentUser||currentUser.uid!==gameState.creatorId||deckLen===0; foulBtn.onclick=()=>{ if(!currentUser||currentUser.uid!==gameState.creatorId){ alert('您只能為自己按犯規（請切換到該玩家的帳號）'); return; } foulDrawFor(p.id); };
+
+        right.appendChild(countSpan); right.appendChild(foulBtn); header.appendChild(left); header.appendChild(right); wrapper.appendChild(header);
+
+        const cardsRow=document.createElement('div'); cardsRow.className='flex gap-2 flex-wrap';
+        
+        cards.forEach(c=>{
+          const cardEl=document.createElement('div'); cardEl.className='card';
+          const isMine = currentUser && p.id===currentUser.uid;
+          
+          const rank = getCardRank(c); // 取得牌的數字等級
+
+          // 判斷是否需要黃框標註
+          const isMarkedByBall = revealedNumbers.includes(rank);
+          if(isMarkedByBall) cardEl.classList.add('marked');
+
+          // 顯示邏輯：所有人的牌都是牌面朝上
+          cardEl.classList.add('card-face'); 
+          cardEl.textContent=c; 
+          
+               
+          if(c[0]==='♥'||c[0]==='♦') cardEl.classList.add('suit-red'); else cardEl.classList.add('suit-black'); 
+          
+          // 如果牌被標註了，但不是自己的牌，也要移除滑鼠指示 (可選)
+          if(!isMine && isMarkedByBall){
+            cardEl.style.cursor='default';
+          }
+          
+          cardsRow.appendChild(cardEl);
         });
+        wrapper.appendChild(cardsRow); playersArea.appendChild(wrapper);
+      });
+    }
 
-        btnStart.addEventListener('click', async () => {
-            if (!gameState) return;
-            let deck = shuffle(buildDeck());
-            const players = Object.keys(gameState.players || {});
-            const dealCards = {};
-            for (const pid of players) { dealCards[pid] = deck.splice(0, CARDS_PER_PLAYER).map(c => c.code); }
-            try {
-                await updateDoc(roomRef, {
-                    gameStarted: true,
-                    deck: deck.map(c => c.code),
-                    players: Object.fromEntries(players.map(pid => [pid, { ...gameState.players[pid], cards: dealCards[pid] }])),
-                    revealedNumbers: [],
-                    updatedAt: serverTimestamp()
-                });
-            } catch (e) { console.log('start err', e); }
-        });
-
-        btnRestart.addEventListener('click', async () => {
-            if (!gameState) return;
-            try { await updateDoc(roomRef, { gameStarted: false, deck: [], revealedNumbers: [], players: {}, updatedAt: serverTimestamp() }); } catch (e) { console.log('restart err', e); }
-        });
-
-        async function foulDrawFor(playerId) {
-            if (!currentUser || currentUser.uid !== playerId) return;
-            if (!gameState) return;
-            const deck = gameState.deck || [];
-            if (deck.length === 0) { alert('牌堆已空，無法抽牌'); return; }
-            const drawnCard = deck[0]; // 取第一張牌
-            const playerCards = gameState.players[playerId]?.cards || [];
-            playerCards.push(drawnCard);
-
-            try {
-                await runTransaction(db, async (t) => {
-                    const snap = await t.get(roomRef);
-                    if (!snap.exists()) throw '房間不存在';
-                    const data = snap.data();
-                    const deckNow = data.deck || [];
-                    if (deckNow.length === 0) throw '牌已抽完';
-                    t.update(roomRef, {
-                        [`players.${playerId}.cards`]: playerCards,
-                        deck: deckNow.slice(1),
-                        updatedAt: serverTimestamp()
-                    });
-                });
-            } catch (e) { console.log('foulDraw transaction err', e); alert('抽牌失敗'); }
-        }
-
-        function renderUI() {
-            if (!gameState) { joinPanel.classList.remove('hidden'); roomPanel.classList.add('hidden'); return; }
-            joinPanel.classList.add('hidden'); roomPanel.classList.remove('hidden');
-            const players = gameState.players || {};
-            const playerIds = Object.keys(players || {});
-            roomOwnerEl.textContent = gameState.creatorId ? players[gameState.creatorId]?.nickname || '—' : '—';
-            roomCountEl.textContent = playerIds.length + ' / ' + MAX_PLAYERS;
-            if (players[currentUser.uid]) {
-                myNickname = players[currentUser.uid].nickname || '';
-                myNickEl.textContent = myNickname;
-            } else {
-                myNickEl.textContent = '—';
-            }
-            btnStart.style.display = (gameState.creatorId === currentUser.uid) ? 'inline-block' : 'none';
-            btnRestart.style.display = (gameState.creatorId === currentUser.uid) ? 'inline-block' : 'none';
-            noticeEl.textContent = gameState.notice || '';
-
-            renderBallButtons();
-            updateMarquee();
-
-            playersArea.innerHTML = '';
-
-            // 先把玩家轉成陣列，並計算剩餘未揭牌數
-            const playersArr = Object.values(players).map(p => {
-                const unmarkedCount = calculateUnmarkedCards(p.cards || [], gameState.revealedNumbers || []);
-                return { ...p, unmarkedCount };
-            });
-
-            // 自己排最上面
-            const me = playersArr.find(p => p.id === currentUser.uid);
-            const others = playersArr.filter(p => p.id !== currentUser.uid);
-
-            // 其他玩家依剩餘牌數由少到多排序
-            others.sort((a, b) => a.unmarkedCount - b.unmarkedCount);
-
-            // 組合排序後的陣列
-            const sortedPlayers = me ? [me, ...others] : others;
-
-            // 渲染玩家
-            for (const player of sortedPlayers) {
-                const pid = player.id;
-                const div = document.createElement('div'); div.className = 'p-2 rounded bg-slate-800 border border-slate-700';
-                const header = document.createElement('div'); header.className = 'player-header';
-                const nameDiv = document.createElement('div'); nameDiv.textContent = player.nickname;
-                header.appendChild(nameDiv);
-
-                const foulBtn = document.createElement('button');
-                foulBtn.textContent = '犯規抽牌';
-                foulBtn.className = 'foul-btn';
-                if (currentUser.uid !== pid) foulBtn.disabled = true;
-                foulBtn.onclick = () => foulDrawFor(pid);
-                header.appendChild(foulBtn);
-
-                div.appendChild(header);
-
-                const cardsDiv = document.createElement('div'); cardsDiv.className = 'mt-2 flex flex-wrap gap-1';
-                const revealedNumbers = gameState.revealedNumbers || [];
-                for (const c of player.cards) {
-                    const rank = getCardRank(c);
-                    const isMine = currentUser.uid === pid;
-                    const isRevealed = revealedNumbers.includes(rank);
-                    const showFace = isMine || isRevealed;
-
-                    const cardEl = document.createElement('div');
-                    cardEl.className = 'card ' + (showFace ? 'card-face' : 'card-back');
-
-                    // 紅黑花色
-                    if (c) {
-                        if (c[0] === '♥' || c[0] === '♦') cardEl.classList.add('suit-red');
-                        else cardEl.classList.add('suit-black');
-                        cardEl.textContent = showFace ? c : '';
-                    } else {
-                        cardEl.textContent = ''; // 蓋牌不顯示 ?
-                    }
-                    
-                    // 黃框標註
-                    if (currentUser.uid === pid && revealedNumbers.includes(rank)) {
-                        cardEl.classList.add('marked');
-                    }
-                    cardsDiv.appendChild(cardEl);
-                }
-
-                div.appendChild(cardsDiv);
-                playersArea.appendChild(div);
-            }
-
-        }
-
-        doAnonymousAuth();
-    </script>
+    (async function(){ await doAnonymousAuth(); })();
+  </script>
 </body>
-
 </html>
