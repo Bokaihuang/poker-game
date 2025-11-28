@@ -66,11 +66,18 @@
             position: relative;
             outline: none;
             transform: none;
-
+            /* 為別人的牌提供一個輕微的變暗提示，確保顯示出它們已經被消除 */
+            filter: brightness(0.95);
         }
 
-        /* 繪製 45度淺藍色線條 */
-        .marked::after {
+        /* 2. 只有「自己的牌」且「已被標記」時，才顯示劃線 */
+        .my-card.marked {
+            filter: none;
+            /* 自己的牌保持亮度 */
+        }
+
+        .my-card.marked::after {
+            /* 使用之前定義的淺藍色槓掉的線條 */
             content: "";
             position: absolute;
             inset: 0;
@@ -81,7 +88,7 @@
                     transparent calc(50% - 2.5px),
                     rgba(56, 189, 248, 0.9) calc(50% - 0.7px),
                     rgba(56, 189, 248, 0.9) calc(50% + 0.7px),
-                    transparent calc(50% + 0.7px));
+                    transparent calc(50% + 2.5px));
         }
 
         .small {
