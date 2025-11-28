@@ -25,37 +25,28 @@
             transition: transform 0.3s;
         }
 
-        /* 卡背樣式 */
+        
         .card-back {
-            /* 主背景色：經典撲克牌紅 */
+            
             background-color: #c93535;
-
-            /* 疊加兩個交叉的斜線漸層，創造菱形格子效果 */
             background-image:
-                /* 1. 從左下到右上斜線 (45度) */
                 repeating-linear-gradient(45deg,
                     transparent, transparent 7px,
-                    /* 7px 紅色區域 */
                     rgba(255, 255, 255, 0.4) 7px,
-                    /* 7px 開始是線條 */
                     rgba(255, 255, 255, 0.4) 8px
-                    /* 1px 寬的淺色線 */
+ 
                 ),
-                /* 2. 從左上到右下斜線 (-45度) */
+                
                 repeating-linear-gradient(-45deg,
                     transparent, transparent 7px,
                     rgba(255, 255, 255, 0.4) 7px,
                     rgba(255, 255, 255, 0.4) 8px);
 
-            /* 設定背景重複的大小，決定菱形格子的大小 */
             background-size: 10px 10px;
-
-            /* 保持原有的邊框和顏色設定 */
             border: 2px solid rgba(255, 255, 255, .1);
             color: transparent;
         }
 
-        /* 卡面樣式 */
         .card-face {
             background: white;
             color: #071024;
@@ -66,18 +57,14 @@
             position: relative;
             outline: none;
             transform: none;
-            /* 為別人的牌提供一個輕微的變暗提示，確保顯示出它們已經被消除 */
-            filter: brightness(0.95);
         }
 
-        /* 2. 只有「自己的牌」且「已被標記」時，才顯示劃線 */
+
         .my-card.marked {
             filter: none;
-            /* 自己的牌保持亮度 */
         }
 
         .my-card.marked::after {
-            /* 使用之前定義的淺藍色槓掉的線條 */
             content: "";
             position: absolute;
             inset: 0;
@@ -127,7 +114,6 @@
             justify-content: space-between;
         }
 
-        /* ===== 球按鈕 美化 ===== */
         .ball-btn {
             width: 40px;
             height: 40px;
@@ -156,7 +142,6 @@
             transform: translateY(0) scale(0.98);
         }
 
-        /* 選中狀態 */
         .ball-btn.selected {
             border-color: #55CCFF;
             box-shadow: 0 8px 18px rgba(85, 204, 255, 0.2), 0 0 8px rgba(85, 204, 255, 0.3);
@@ -164,7 +149,6 @@
             filter: brightness(1.08);
         }
 
-        /* 球顏色 */
         .ball-yellow {
             --ball-color-solid: #FFA600;
             background: linear-gradient(180deg, #ffc65b, #ffa600);
@@ -212,7 +196,6 @@
             border-color: rgba(255, 255, 255, 0.06);
         }
 
-        /* stripe 球 (9~13) */
         .ball-stripe {
             background: linear-gradient(to bottom,
                     white 0%,
@@ -246,7 +229,7 @@
             padding-left: 100%;
             /* 從右邊開始移動 */
             animation: marquee 15s linear infinite;
-            /* 30秒一個循環 */
+            /* 15秒一個循環 */
         }
 
         @keyframes marquee {
