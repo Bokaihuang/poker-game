@@ -27,11 +27,30 @@
 
         /* 卡背樣式 */
         .card-back {
-            background: repeating-linear-gradient(45deg,
-                    #0b1220,
-                    #0b1220 10px,
-                    #1e293b 10px,
-                    #1e293b 20px);
+            /* 主背景色：經典撲克牌紅 */
+            background-color: #c93535;
+
+            /* 疊加兩個交叉的斜線漸層，創造菱形格子效果 */
+            background-image:
+                /* 1. 從左下到右上斜線 (45度) */
+                repeating-linear-gradient(45deg,
+                    transparent, transparent 7px,
+                    /* 7px 紅色區域 */
+                    rgba(255, 255, 255, 0.4) 7px,
+                    /* 7px 開始是線條 */
+                    rgba(255, 255, 255, 0.4) 8px
+                    /* 1px 寬的淺色線 */
+                ),
+                /* 2. 從左上到右下斜線 (-45度) */
+                repeating-linear-gradient(-45deg,
+                    transparent, transparent 7px,
+                    rgba(255, 255, 255, 0.4) 7px,
+                    rgba(255, 255, 255, 0.4) 8px);
+
+            /* 設定背景重複的大小，決定菱形格子的大小 */
+            background-size: 10px 10px;
+
+            /* 保持原有的邊框和顏色設定 */
             border: 2px solid rgba(255, 255, 255, .1);
             color: transparent;
         }
@@ -45,24 +64,19 @@
 
         .marked {
             position: relative;
-            /* 為了讓裡面的線條(::after)能對齊 */
             outline: none;
-            /* 移除黃框 */
             transform: none;
-            /* 移除放大效果，讓它看起來像是在紙上被劃掉 */
+
         }
 
-        /* 新增：使用偽元素繪製 45度淺藍色線條 */
+        /* 繪製 45度淺藍色線條 */
         .marked::after {
             content: "";
             position: absolute;
             inset: 0;
-            /* 等同於 top:0; right:0; bottom:0; left:0; 充滿整張牌 */
             border-radius: 8px;
             pointer-events: none;
-            /* 讓線條不影響滑鼠點擊 */
 
-            /* 核心魔法：用漸層畫出一條線 (從左下 到 右上) */
             background: linear-gradient(to top right,
                     transparent calc(50% - 2.5px),
                     rgba(56, 189, 248, 0.9) calc(50% - 0.7px),
