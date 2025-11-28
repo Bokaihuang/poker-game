@@ -25,18 +25,15 @@
             transition: transform 0.3s;
         }
 
-        
+        /* 卡背樣式: 經典紅色菱形格紋 */
         .card-back {
-            
             background-color: #c93535;
             background-image:
                 repeating-linear-gradient(45deg,
                     transparent, transparent 7px,
                     rgba(255, 255, 255, 0.4) 7px,
                     rgba(255, 255, 255, 0.4) 8px
- 
                 ),
-                
                 repeating-linear-gradient(-45deg,
                     transparent, transparent 7px,
                     rgba(255, 255, 255, 0.4) 7px,
@@ -53,17 +50,19 @@
             border: 2px solid rgba(2, 6, 23, .06);
         }
 
+        /* 消除標記樣式 */
         .marked {
             position: relative;
             outline: none;
             transform: none;
+            filter: brightness(0.95);
         }
-
 
         .my-card.marked {
             filter: none;
         }
 
+        /* 劃線效果 (僅限自己的牌) */
         .my-card.marked::after {
             content: "";
             position: absolute;
@@ -72,10 +71,10 @@
             pointer-events: none;
 
             background: linear-gradient(to top right,
-                    transparent calc(50% - 2.5px),
-                    rgba(56, 189, 248, 0.9) calc(50% - 0.7px),
-                    rgba(56, 189, 248, 0.9) calc(50% + 0.7px),
-                    transparent calc(50% + 2.5px));
+                transparent calc(50% - 2.5px),
+                rgba(56, 189, 248, 0.9) calc(50% - 0.7px),
+                rgba(56, 189, 248, 0.9) calc(50% + 0.7px),
+                transparent calc(50% + 2.5px));
         }
 
         .small {
@@ -91,6 +90,7 @@
             color: #111827;
         }
 
+        /* 犯規按鈕 */
         .foul-btn {
             background: #ef4444;
             color: white;
@@ -106,6 +106,47 @@
             cursor: not-allowed;
             background: #7f1d1d;
         }
+        
+        /* 新增: 播放聲音按鈕樣式 (基礎) */
+        .speaker-btn {
+            padding: 6px 8px;
+            border-radius: 6px;
+            font-weight: 600;
+            cursor: pointer;
+            border: none;
+            transition: background 0.2s;
+            font-size: 0.85rem;
+        }
+
+        /* 播放狀態 (Play) */
+        .speaker-btn.play {
+            background: #007bff; /* 藍色 */
+            color: white;
+        }
+
+        .speaker-btn.play:hover {
+            background: #0056b3;
+        }
+
+        /* 停止狀態 (Stop) */
+        .speaker-btn.stop {
+            background: #dc3545; /* 紅色 */
+            color: white;
+        }
+
+        .speaker-btn.stop:hover {
+            background: #c82333;
+        }
+
+        /* 【新增樣式】: 鎖定狀態的 speaker-btn (用於非自己的牌組) */
+        .speaker-btn:disabled {
+            background: #475569; /* 灰藍色 */
+            color: #e2e8f0;
+            cursor: not-allowed;
+            opacity: 0.6;
+            transform: none;
+            box-shadow: none;
+        }
 
         .player-header {
             display: flex;
@@ -114,6 +155,7 @@
             justify-content: space-between;
         }
 
+        /* 球按鈕樣式 */
         .ball-btn {
             width: 40px;
             height: 40px;
@@ -198,12 +240,12 @@
 
         .ball-stripe {
             background: linear-gradient(to bottom,
-                    white 0%,
-                    white 20%,
-                    var(--ball-color-solid) 20%,
-                    var(--ball-color-solid) 80%,
-                    white 80%,
-                    white 100%);
+                white 0%,
+                white 20%,
+                var(--ball-color-solid) 20%,
+                var(--ball-color-solid) 80%,
+                white 80%,
+                white 100%);
             color: #071024;
             font-weight: 700;
             overflow: hidden;
@@ -214,7 +256,6 @@
             overflow: hidden;
             white-space: nowrap;
             background-color: #1e293b;
-            /* 深藍灰背景 */
             padding: 6px 0;
             border-radius: 8px;
             margin-bottom: 1rem;
@@ -399,7 +440,7 @@
 
         function updateMarquee() {
             if (!gameState || !gameState.gameStarted) {
-                marqueeTextEl.textContent = "🎱 Welcome to Card Pool Challenge.  稍等發牌...遊戲即將開始 ~ 預祝各位都能抽副好牌！";
+                marqueeTextEl.textContent = "🎱 Welcome to Card Pool Challenge. 稍等發牌...遊戲即將開始 ~ 預祝各位都能抽副好牌！";
                 return;
             }
 
@@ -480,7 +521,7 @@
             } catch (e) { console.log('join err', e); setStatus('加入失敗'); }
         });
 
-        btnLeave.addEventListener('click', async () => { if (!currentUser) return; try { if (gameState.creatorId === currentUser.uid && myNickname === 'Kai') { await deleteDoc(roomRef); setStatus('房主已退出'); return; } await updateDoc(roomRef, { [`players.${currentUser.uid}`]: deleteField(), updatedAt: serverTimestamp() }); setStatus('已退出房間'); myNickname = ''; } catch (e) { console.log('leave err', e); setStatus('退出失敗'); } });
+        btnLeave.addEventListener('click', async () => { if (!currentUser) return; try { if (gameState.creatorId === currentUser.uid && myNickname === 'Kai') { await deleteDoc(roomRef); setStatus('房主已退出'); return; } await updateDoc(roomRef, { [`players.${currentUser.uid}`]: deleteField(), updatedAt: serverTimestamp() }); setStatus('已退出房間'); myNickname = ''; stopSpeaking(); } catch (e) { console.log('leave err', e); setStatus('退出失敗'); } });
 
         btnStart.addEventListener('click', async () => {
             if (!currentUser || !gameState) return; if (gameState.creatorId !== currentUser.uid || myNickname !== 'Kai') { setStatus('只有 Kai 房主可以發牌'); return; }
@@ -508,6 +549,7 @@
                 updateObj['deck'] = [];
                 await updateDoc(roomRef, updateObj);
                 setStatus('已重開');
+                stopSpeaking(); // 重開遊戲時，停止語音
             } catch (e) { console.log('restart err', e); setStatus('重開失敗'); }
         });
 
@@ -525,11 +567,105 @@
             } catch (e) { console.log('foul draw err', e); setStatus('犯規抽牌失敗：' + (e.message || e)); }
         }
 
+        // ====== 語音播放核心與狀態 ======
+
+        // 全域狀態：追蹤目前是否正在播放，以及是哪位玩家的牌組
+        let currentSpeakerId = null;
+        let currentUtterance = null; 
+
+        // 撲克牌排序和語音轉換映射
+        const rankText = { 'A': 'Ace', 'J': 'Jack', 'Q': 'Queen', 'K': 'King', '10': '十' }; 
+
+        /**
+         * 停止所有語音播放，並重置狀態。
+         */
+        function stopSpeaking() {
+            if ('speechSynthesis' in window) {
+                window.speechSynthesis.cancel();
+            }
+            currentSpeakerId = null;
+            currentUtterance = null;
+            if (typeof renderUI === 'function') {
+                renderUI();
+            }
+        }
+
+        /**
+         * 準備語音內容並啟動循環播放
+         */
+        function startSpeakingLoop(cards, revealedNumbers, playerId) {
+            if (!('speechSynthesis' in window)) {
+                console.warn('Web Speech API 不被支援。');
+                return;
+            }
+
+            stopSpeaking(); 
+
+            // 1. 篩選出未被劃掉的牌的 Rank，並去重、排序
+            const unmarkedRanks = new Set();
+            cards.forEach(card => {
+                const rank = getCardRank(card);
+                if (!revealedNumbers.includes(rank)) {
+                    unmarkedRanks.add(rank);
+                }
+            });
+
+            const uniqueRanksArray = Array.from(unmarkedRanks);
+            const rankOrder = { 'A': 1, '2': 2, '3': 3, '4': 4, '5': 5, '6': 6, '7': 7, '8': 8, '9': 9, '10': 10, 'J': 11, 'Q': 12, 'K': 13 };
+            const sortedRanks = uniqueRanksArray.sort((a, b) => rankOrder[a] - rankOrder[b]);
+
+            // 2. 轉換為朗讀文本
+            const speakableList = sortedRanks
+                .map(rank => rankText[rank] || rank)
+                .join(', ');
+                
+            const textToSpeak = sortedRanks.length > 0 ? 
+                `剩餘的牌有：${speakableList}` : 
+                '恭喜！牌已全數消除。';
+
+            // 3. 設定全域狀態
+            currentSpeakerId = playerId;
+
+            // 4. 啟動遞迴播放循環
+            function recursiveSpeak() {
+                if (currentSpeakerId !== playerId) return; 
+
+                currentUtterance = new SpeechSynthesisUtterance(textToSpeak);
+                currentUtterance.lang = 'zh-TW';
+                currentUtterance.rate = 1.2;
+
+                // 語音播報結束時，使用 setTimeout 延遲 3 秒後再呼叫自己，實現循環
+                currentUtterance.onend = function() {
+                    if (currentSpeakerId === playerId) {
+                        
+                        setTimeout(function() {
+                            // 在延遲結束後，再次確認狀態是否仍在播放中
+                            if (currentSpeakerId === playerId) {
+                                recursiveSpeak();
+                            }
+                        }, 3000); // 3000 毫秒 = 3 秒的間隔
+
+                    }
+                };
+
+                window.speechSynthesis.speak(currentUtterance);
+            }
+            
+            recursiveSpeak();
+            renderUI(); 
+        }
+
         // ---------- Render UI ----------
         function renderUI() {
             if (!gameState) { joinPanel.classList.remove('hidden'); roomPanel.classList.add('hidden'); myNickEl.textContent = '—'; updateMarquee(); return; }
             const players = gameState.players || {}; const cleanPlayers = {}; Object.keys(players).forEach(k => { if (players[k] && players[k].id) cleanPlayers[k] = players[k]; });
             const amInRoom = currentUser && cleanPlayers[currentUser.uid];
+            
+            // 如果語音正在播放，且當前用戶已退出房間，則停止語音
+            if (currentSpeakerId && !amInRoom) {
+                stopSpeaking();
+            }
+
             if (!amInRoom) { joinPanel.classList.remove('hidden'); roomPanel.classList.add('hidden'); roomOwnerEl.textContent = cleanPlayers[gameState.creatorId]?.nickname || '—'; roomCountEl.textContent = `${Object.keys(cleanPlayers).length} / ${MAX_PLAYERS}`; updateMarquee(); return; }
             joinPanel.classList.add('hidden'); roomPanel.classList.remove('hidden'); myNickname = cleanPlayers[currentUser.uid].nickname || myNickname; myNickEl.textContent = myNickname;
             roomOwnerEl.textContent = cleanPlayers[gameState.creatorId]?.nickname || '—'; roomCountEl.textContent = `${Object.keys(cleanPlayers).length} / ${MAX_PLAYERS}`; noticeEl.textContent = gameState.notice || '';
@@ -537,7 +673,6 @@
             const amHost = gameState.creatorId === currentUser.uid && myNickname === 'Kai';
             if (amHost) { btnStart.classList.remove('hidden'); btnRestart.classList.remove('hidden'); } else { btnStart.classList.add('hidden'); btnRestart.classList.add('hidden'); }
 
-            // 確保只執行一次呼叫與變數宣告
             renderBallButtons();
             updateMarquee();
 
@@ -547,34 +682,18 @@
             playersArea.innerHTML = '';
             const pList = Object.values(cleanPlayers);
 
-            // ----------------------------------------------------
-            // 【步驟 1：優化 - 預先計算並附加剩餘牌數】
-            pList.forEach(p => {
-                // 將計算結果儲存在玩家物件上 (p.unmarkedCount)
-                p.unmarkedCount = calculateUnmarkedCards(p.cards || [], revealedNumbers);
-            });
+            pList.forEach(p => { p.unmarkedCount = calculateUnmarkedCards(p.cards || [], revealedNumbers); });
 
-            // --------------------------------000--------------------
-            // 【步驟 2：執行排序 (自己優先，剩餘牌數由少到多) 】
             pList.sort((a, b) => {
-                // 1. 自己永遠在最前面
                 if (a.id === currentUser.uid) return -1;
                 if (b.id === currentUser.uid) return 1;
-
-                // 2. 剩餘牌數由少到多 (Ascending)
-                if (a.unmarkedCount !== b.unmarkedCount) {
-                    return a.unmarkedCount - b.unmarkedCount;
-                }
-
-                // 3. 次要規則：如果剩餘牌數相同，則按 ID 字母順序穩定排列
+                if (a.unmarkedCount !== b.unmarkedCount) { return a.unmarkedCount - b.unmarkedCount; }
                 if (a.id < b.id) return -1;
                 if (a.id > b.id) return 1;
-
                 return 0;
             });
-            // ----------------------------------------------------
 
-            // 【步驟 3：渲染玩家區塊 (優化後只執行一次循環) 】
+            // 【步驟 3：渲染玩家區塊】
             pList.forEach(p => {
                 const wrapper = document.createElement('div'); wrapper.className = 'p-3 rounded bg-slate-800 border border-slate-700';
                 const header = document.createElement('div'); header.className = 'player-header mb-2';
@@ -583,19 +702,44 @@
 
                 const cards = p.cards || [];
                 const totalCards = cards.length;
-
-                // 使用預先計算的值
                 const unmarkedCards = p.unmarkedCount;
+                const isMyPlayer = currentUser && currentUser.uid === p.id; // <--- 新增此判斷
 
                 const countSpan = document.createElement('div'); countSpan.className = 'small';
                 countSpan.textContent = `剩餘牌 ${unmarkedCards} / 總牌數 ${totalCards}`;
 
+                // --- 語音播放按鈕邏輯 (重點修改區) ---
+                const speakerBtn = document.createElement('button');
+                const isPlayerSpeaking = currentSpeakerId === p.id;
+                
+                speakerBtn.textContent = isPlayerSpeaking ? '◼ 停止' : '🔊 播放';
+                
+                if (isMyPlayer) {
+                    // 自己的牌組：啟用播放/停止功能
+                    speakerBtn.className = isPlayerSpeaking ? 'speaker-btn stop' : 'speaker-btn play'; 
+                    const cardsToSpeak = p.cards || [];
+                    speakerBtn.onclick = () => {
+                        if (isPlayerSpeaking) {
+                            stopSpeaking();
+                        } else {
+                            startSpeakingLoop(cardsToSpeak, revealedNumbers, p.id); 
+                        }
+                    };
+                } else {
+                    // 別人的牌組：鎖定按鈕
+                    speakerBtn.disabled = true;
+                    speakerBtn.textContent = '🔒 播放';
+                    // 移除 active 樣式，確保顯示為鎖定樣式
+                    speakerBtn.classList.remove('play');
+                    speakerBtn.classList.remove('stop');
+                }
+                // --- 語音播放按鈕邏輯 (結束) ---
+                
                 // --- 犯規按鈕邏輯 ---
                 const foulBtn = document.createElement('button');
                 foulBtn.className = 'foul-btn';
                 foulBtn.textContent = '犯規 +1';
-
-                const isMyPlayer = currentUser && currentUser.uid === p.id;
+                
                 const canDraw = isMyPlayer && deckLen > 0;
 
                 foulBtn.disabled = !canDraw;
@@ -603,30 +747,32 @@
                     if (canDraw) foulDrawFor(p.id);
                 };
 
-                right.appendChild(countSpan); right.appendChild(foulBtn); header.appendChild(left); header.appendChild(right); wrapper.appendChild(header);
+                // 附加按鈕: 剩餘牌數 -> 播放/停止 -> 犯規
+                right.appendChild(countSpan); 
+                right.appendChild(speakerBtn); 
+                right.appendChild(foulBtn); 
+                
+                header.appendChild(left); header.appendChild(right); wrapper.appendChild(header);
 
                 const cardsRow = document.createElement('div'); cardsRow.className = 'flex gap-2 flex-wrap';
 
                 cards.forEach(c => {
                     const cardEl = document.createElement('div'); cardEl.className = 'card';
-                    const isMine = currentUser && p.id === currentUser.uid;
-
+                    
                     const rank = getCardRank(c);
                     const isMarkedByBall = revealedNumbers.includes(rank);
 
                     if (isMarkedByBall) cardEl.classList.add('marked');
-                    // 確保加上 my-card 標籤，以啟動劃線的視覺效果
-                    if (isMine) cardEl.classList.add('my-card');
+                    if (isMyPlayer) cardEl.classList.add('my-card'); // 使用 isMyPlayer
 
-                    // --- 蓋牌/開牌 邏輯 ---
-                    const shouldShowFace = isMine || isMarkedByBall;
+                    const shouldShowFace = isMyPlayer || isMarkedByBall; // 使用 isMyPlayer
 
                     if (shouldShowFace) {
                         cardEl.classList.add('card-face');
                         cardEl.textContent = c;
                         if (c[0] === '♥' || c[0] === '♦') cardEl.classList.add('suit-red');
                         else cardEl.classList.add('suit-black');
-                        if (!isMine && isMarkedByBall) { cardEl.style.cursor = 'default'; }
+                        if (!isMyPlayer && isMarkedByBall) { cardEl.style.cursor = 'default'; }
                     } else {
                         cardEl.classList.add('card-back');
                         cardEl.textContent = '';
