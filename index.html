@@ -285,12 +285,12 @@
             }
         }
         
-        /* 【新增樣式】: 聽牌彈窗 */
+        /* 【已修正】: 聽牌彈窗移到畫面正中央 */
         #tingPaiPopup {
             position: fixed;
-            bottom: 20px;
+            top: 50%; /* 新增：垂直居中 */
             left: 50%;
-            transform: translateX(-50%);
+            transform: translate(-50%, -50%); /* 修正：水平和垂直居中 */
             background-color: #fde047; /* 亮黃色 */
             color: #071024;
             padding: 12px 24px;
