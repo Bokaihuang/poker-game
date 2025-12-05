@@ -285,12 +285,12 @@
             }
         }
         
-        /* 【已修正】: 聽牌彈窗移到畫面正中央 */
+        /* 聽牌彈窗置中 */
         #tingPaiPopup {
             position: fixed;
-            top: 50%; /* 新增：垂直居中 */
+            top: 50%; 
             left: 50%;
-            transform: translate(-50%, -50%); /* 修正：水平和垂直居中 */
+            transform: translate(-50%, -50%); 
             background-color: #fde047; /* 亮黃色 */
             color: #071024;
             padding: 12px 24px;
@@ -301,7 +301,7 @@
             z-index: 1000;
             opacity: 0;
             transition: opacity 0.5s ease-in-out;
-            pointer-events: none; /* 讓它不影響點擊下方的元素 */
+            pointer-events: none; 
         }
 
         #tingPaiPopup.show {
@@ -480,6 +480,9 @@
         function buildDeck() { const deck = []; for (let r = 1; r <= 13; r++) { for (let s = 0; s < 4; s++) { const rank = rankMap[r] || String(r); deck.push({ suit: suits[s], rank, code: `${suits[s]}${rank}` }); } } return deck; }
         function shuffle(arr) { for (let i = arr.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1));[arr[i], arr[j]] = [arr[j], arr[i]]; } return arr; }
         
+        /**
+         * 計算玩家手中還沒被叫到的【不重複數字】的數量（用於排序和聽牌判斷，需保密）。
+         */
         function getUnmarkedRanks(cards, revealedNumbers) {
             const unmarkedRanks = new Set();
             if (!cards || cards.length === 0) return unmarkedRanks;
@@ -494,8 +497,22 @@
             return unmarkedRanks;
         }
 
-        function calculateUnmarkedCards(cards, revealedNumbers) {
-            return getUnmarkedRanks(cards, revealedNumbers).size; 
+        /**
+         * 【新增】計算玩家手中還沒被叫到的【實體牌張】的數量（用於公開顯示）。
+         */
+        function calculateUnmarkedCardCount(cards, revealedNumbers) {
+            let unmarkedCardCount = 0;
+            const revealed = new Set(revealedNumbers || []); 
+            
+            if (!cards || cards.length === 0) return 0;
+
+            for (const cardCode of cards) {
+                const rank = getCardRank(cardCode); 
+                if (!revealed.has(rank)) {
+                    unmarkedCardCount++;
+                }
+            }
+            return unmarkedCardCount;
         }
 
         function updateMarquee() {
@@ -513,6 +530,7 @@
                 if (player && player.id) {
                     const cards = player.cards || [];
                     const unmarkedRanks = getUnmarkedRanks(cards, revealedNumbers);
+                    // 跑馬燈仍然顯示【剩餘號碼】（因為這是公開資訊，方便觀察誰接近勝利）
                     messages.push(`【${player.nickname}】剩餘號碼：${unmarkedRanks.size} 個`);
                 }
             }
@@ -657,7 +675,7 @@
             currentSpeakerId = null;
             currentUtterance = null;
             
-            // 【修復 BUG】：強制更新 UI，使「停止」鍵跳回「播放」
+            // 強制更新 UI，使「停止」鍵跳回「播放」
             renderUI(); 
         }
 
@@ -680,8 +698,8 @@
                 .join(', ');
                 
             const textToSpeak = sortedRanks.length > 0 ? 
-                `剩餘的牌有：${speakableList}` : 
-                '恭喜！您已獲勝。';
+                `這位玩家剩餘的牌有：${speakableList}` : 
+                '恭喜！這位玩家的牌已全數消除。';
 
             currentSpeakerId = playerId;
 
@@ -778,8 +796,13 @@
             playersArea.innerHTML = '';
             const pList = Object.values(cleanPlayers);
 
-            pList.forEach(p => { p.unmarkedCount = getUnmarkedRanks(p.cards || [], revealedNumbers).size; });
+            // 計算兩個數值: 1. 剩餘號碼數 (用於排序/聽牌) 2. 剩餘牌數 (用於公開顯示)
+            pList.forEach(p => { 
+                p.unmarkedCount = getUnmarkedRanks(p.cards || [], revealedNumbers).size; 
+                p.unmarkedCardCount = calculateUnmarkedCardCount(p.cards || [], revealedNumbers); // 【新增】
+            });
 
+            // 排序依然使用剩餘【號碼數】(unmarkedCount)
             pList.sort((a, b) => {
                 if (a.id === currentUser.uid) return -1;
                 if (b.id === currentUser.uid) return 1;
@@ -797,11 +820,14 @@
 
                 const cards = p.cards || [];
                 const totalCards = cards.length;
-                const unmarkedRanksCount = p.unmarkedCount;
+                
+                // 【使用新的安全數值】
+                const unmarkedCardCount = p.unmarkedCardCount; 
                 const isMyPlayer = currentUser && currentUser.uid === p.id;
 
                 const countSpan = document.createElement('div'); countSpan.className = 'small';
-                countSpan.textContent = `剩餘號碼 ${unmarkedRanksCount} / 總牌數 ${totalCards}`;
+                // 【修正】顯示「剩餘牌數」
+                countSpan.textContent = `剩餘牌數 ${unmarkedCardCount} / 總牌數 ${totalCards}`;
 
                 const speakerBtn = document.createElement('button');
                 const isPlayerSpeaking = currentSpeakerId === p.id;
