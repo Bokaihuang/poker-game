@@ -498,7 +498,7 @@
         }
 
         /**
-         * 【新增】計算玩家手中還沒被叫到的【實體牌張】的數量（用於公開顯示）。
+         * 計算玩家手中還沒被叫到的【實體牌張】的數量（用於公開顯示）。
          */
         function calculateUnmarkedCardCount(cards, revealedNumbers) {
             let unmarkedCardCount = 0;
@@ -546,11 +546,38 @@
         }
 
         function toggleNumber(n) {
-            if (!gameState) return;
+            if (!gameState || !currentUser) return;
             const numbers = Array.isArray(gameState.revealedNumbers) ? [...gameState.revealedNumbers] : [];
-            if (numbers.includes(n)) numbers.splice(numbers.indexOf(n), 1);
-            else numbers.push(n);
-            updateDoc(roomRef, { revealedNumbers: numbers, updatedAt: serverTimestamp() })
+            const amHost = gameState.creatorId === currentUser.uid && myNickname === 'Kai';
+            
+            let newNumbers = [...numbers];
+            let updateObj = { updatedAt: serverTimestamp() };
+            let actionType = '';
+            
+            // 判斷動作：新增或移除
+            if (numbers.includes(n)) {
+                // 移除號碼（恢復未消除狀態）
+                const index = numbers.indexOf(n);
+                newNumbers.splice(index, 1);
+                actionType = 'removed';
+            } else {
+                // 新增號碼（消除狀態）
+                newNumbers.push(n);
+                actionType = 'added';
+            }
+
+            updateObj.revealedNumbers = newNumbers;
+
+            // 檢查是否是「恢復未消除狀態」且不是房主在操作
+            if (actionType === 'removed') {
+                const operatorNickname = gameState.players[currentUser.uid]?.nickname || `Player_${currentUser.uid.slice(0, 4)}`;
+                const warningMessage = `⚠️ 作弊警告: ${operatorNickname} 點擊球號 ${n} 將其【恢復為未消除】狀態。請房主確認。`;
+                
+                // 將警告訊息記錄到 notice 欄位
+                updateObj.notice = warningMessage;
+            }
+
+            updateDoc(roomRef, updateObj)
                 .catch(e => console.log('toggleNumber err', e));
         }
 
@@ -698,8 +725,8 @@
                 .join(', ');
                 
             const textToSpeak = sortedRanks.length > 0 ? 
-                `剩餘的牌有：${speakableList}` : 
-                '恭喜！玩家已獲勝。';
+                `這位玩家剩餘的牌有：${speakableList}` : 
+                '恭喜！這位玩家的牌已全數消除。';
 
             currentSpeakerId = playerId;
 
@@ -799,7 +826,7 @@
             // 計算兩個數值: 1. 剩餘號碼數 (用於排序/聽牌) 2. 剩餘牌數 (用於公開顯示)
             pList.forEach(p => { 
                 p.unmarkedCount = getUnmarkedRanks(p.cards || [], revealedNumbers).size; 
-                p.unmarkedCardCount = calculateUnmarkedCardCount(p.cards || [], revealedNumbers); // 【新增】
+                p.unmarkedCardCount = calculateUnmarkedCardCount(p.cards || [], revealedNumbers); 
             });
 
             // 排序依然使用剩餘【號碼數】(unmarkedCount)
@@ -821,12 +848,11 @@
                 const cards = p.cards || [];
                 const totalCards = cards.length;
                 
-                // 【使用新的安全數值】
                 const unmarkedCardCount = p.unmarkedCardCount; 
                 const isMyPlayer = currentUser && currentUser.uid === p.id;
 
                 const countSpan = document.createElement('div'); countSpan.className = 'small';
-                // 【修正】顯示「剩餘牌數」
+                // 顯示「剩餘牌數」
                 countSpan.textContent = `剩餘牌數 ${unmarkedCardCount} / 總牌數 ${totalCards}`;
 
                 const speakerBtn = document.createElement('button');
