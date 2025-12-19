@@ -571,7 +571,7 @@
             // 檢查是否是「恢復未消除狀態」且不是房主在操作
             if (actionType === 'removed') {
                 const operatorNickname = gameState.players[currentUser.uid]?.nickname || `Player_${currentUser.uid.slice(0, 4)}`;
-                const warningMessage = `⚠️ 作弊警告: ${operatorNickname} 點擊球號 ${n} 將其【恢復為未消除】狀態。請房主確認。`;
+                const warningMessage = `⚠️ 作弊警告: ${operatorNickname} 點擊球號 ${n} 將其【恢復為未消除】狀態。作弊者當日幸運值-5。`;
                 
                 // 將警告訊息記錄到 notice 欄位
                 updateObj.notice = warningMessage;
